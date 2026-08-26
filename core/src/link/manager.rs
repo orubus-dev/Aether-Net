@@ -1,14 +1,12 @@
-﻿use crate::link::frame::LinkSession;
+use crate::link::frame::LinkSession;
 use crate::link::session::SessionState;
 use crate::network::node::NodeId;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
-pub const DEFAULT_SESSION_IDLE_TIMEOUT: Duration =
-    Duration::from_secs(300);
+pub const DEFAULT_SESSION_IDLE_TIMEOUT: Duration = Duration::from_secs(300);
 
-pub const DEFAULT_SESSION_MAX_AGE: Duration =
-    Duration::from_secs(3600);
+pub const DEFAULT_SESSION_MAX_AGE: Duration = Duration::from_secs(3600);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SessionId(pub [u8; 16]);
@@ -24,11 +22,7 @@ pub struct ManagedSession {
 }
 
 impl ManagedSession {
-    pub fn new(
-        peer: NodeId,
-        link: LinkSession,
-        now: Instant,
-    ) -> Self {
+    pub fn new(peer: NodeId, link: LinkSession, now: Instant) -> Self {
         Self {
             peer,
             state: SessionState::Established,
@@ -45,11 +39,8 @@ impl ManagedSession {
     }
 
     pub fn is_expired(&self, now: Instant) -> bool {
-        now.duration_since(self.last_activity)
-            >= self.idle_timeout
-            ||
-        now.duration_since(self.created_at)
-            >= self.max_age
+        now.duration_since(self.last_activity) >= self.idle_timeout
+            || now.duration_since(self.created_at) >= self.max_age
     }
 
     pub fn touch(&mut self, now: Instant) {
@@ -71,10 +62,7 @@ impl SessionManager {
         Self::default()
     }
 
-    pub fn insert(
-        &mut self,
-        session: ManagedSession,
-    ) -> Result<SessionId, SessionManagerError> {
+    pub fn insert(&mut self, session: ManagedSession) -> Result<SessionId, SessionManagerError> {
         let id = session.session_id();
 
         if self.sessions.contains_key(&id) {
@@ -86,39 +74,23 @@ impl SessionManager {
         Ok(id)
     }
 
-    pub fn get(
-        &self,
-        id: &SessionId,
-    ) -> Option<&ManagedSession> {
+    pub fn get(&self, id: &SessionId) -> Option<&ManagedSession> {
         self.sessions.get(id)
     }
 
-    pub fn get_mut(
-        &mut self,
-        id: &SessionId,
-    ) -> Option<&mut ManagedSession> {
+    pub fn get_mut(&mut self, id: &SessionId) -> Option<&mut ManagedSession> {
         self.sessions.get_mut(id)
     }
 
-    pub fn remove(
-        &mut self,
-        id: &SessionId,
-    ) -> Option<ManagedSession> {
+    pub fn remove(&mut self, id: &SessionId) -> Option<ManagedSession> {
         self.sessions.remove(id)
     }
 
-    pub fn expire(
-        &mut self,
-        now: Instant,
-    ) -> usize {
+    pub fn expire(&mut self, now: Instant) -> usize {
         let expired: Vec<SessionId> = self
             .sessions
             .iter()
-            .filter_map(|(id, session)| {
-                session
-                    .is_expired(now)
-                    .then_some(*id)
-            })
+            .filter_map(|(id, session)| session.is_expired(now).then_some(*id))
             .collect();
 
         let count = expired.len();

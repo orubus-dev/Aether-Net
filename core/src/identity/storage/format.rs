@@ -1,4 +1,4 @@
-﻿use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 pub const VAULT_FORMAT_VERSION: u32 = 1;
 pub const VAULT_SALT_LENGTH: usize = 32;
@@ -15,11 +15,7 @@ pub struct VaultEnvelope {
 }
 
 impl VaultEnvelope {
-    pub fn new(
-        salt: Vec<u8>,
-        nonce: Vec<u8>,
-        ciphertext: Vec<u8>,
-    ) -> Self {
+    pub fn new(salt: Vec<u8>, nonce: Vec<u8>, ciphertext: Vec<u8>) -> Self {
         Self {
             format_version: VAULT_FORMAT_VERSION,
             algorithm: "ChaCha20-Poly1305".to_owned(),

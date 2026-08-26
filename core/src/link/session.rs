@@ -1,10 +1,5 @@
-﻿use crate::identity::device::DeviceId;
-use crate::link::crypto::{
-    derive_session_keys,
-    transcript_hash,
-    CryptoError,
-    EphemeralKey,
-};
+use crate::identity::device::DeviceId;
+use crate::link::crypto::{CryptoError, EphemeralKey, derive_session_keys, transcript_hash};
 use crate::link::frame::LinkSession;
 use crate::network::node::NodeId;
 
@@ -20,13 +15,10 @@ pub struct SessionNegotiation {
 }
 
 impl SessionNegotiation {
-    pub fn create(
-        role: SessionRole,
-    ) -> Result<Self, CryptoError> {
+    pub fn create(role: SessionRole) -> Result<Self, CryptoError> {
         Ok(Self {
             role,
-            local_ephemeral:
-                EphemeralKey::generate()?,
+            local_ephemeral: EphemeralKey::generate()?,
         })
     }
 
@@ -37,26 +29,19 @@ impl SessionNegotiation {
         initiator: NodeId,
         responder: NodeId,
     ) -> Result<LinkSession, CryptoError> {
-        let shared_secret =
-            self.local_ephemeral
-                .derive_shared_secret(
-                    remote_ephemeral,
-                );
+        let shared_secret = self.local_ephemeral.derive_shared_secret(remote_ephemeral);
 
-        let transcript =
-            transcript_hash(
-                shared_transcript,
-            );
+        let shared_secret_bytes = *shared_secret;
 
-        let keys =
-            derive_session_keys(
-                shared_secret.as_ref(),
-                &transcript,
-                initiator,
-                responder,
-                self.role
-                    == SessionRole::Initiator,
-            )?;
+        let transcript = transcript_hash(shared_transcript);
+
+        let keys = derive_session_keys(
+            &shared_secret_bytes,
+            &transcript,
+            initiator,
+            responder,
+            self.role == SessionRole::Initiator,
+        )?;
 
         Ok(LinkSession::new(keys))
     }

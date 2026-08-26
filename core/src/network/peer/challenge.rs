@@ -1,4 +1,4 @@
-﻿use getrandom;
+use getrandom;
 
 pub const CHALLENGE_LENGTH: usize = 32;
 
@@ -9,8 +9,7 @@ impl Challenge {
     pub fn generate() -> Result<Self, ChallengeError> {
         let mut value = [0u8; CHALLENGE_LENGTH];
 
-        getrandom::fill(&mut value)
-            .map_err(|_| ChallengeError::RandomnessUnavailable)?;
+        getrandom::fill(&mut value).map_err(|_| ChallengeError::RandomnessUnavailable)?;
 
         Ok(Self(value))
     }

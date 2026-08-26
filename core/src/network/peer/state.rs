@@ -1,4 +1,4 @@
-﻿use crate::network::node::NodeId;
+use crate::network::node::NodeId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PeerState {
@@ -31,10 +31,7 @@ pub struct Peer {
 }
 
 impl Peer {
-    pub fn discovered(
-        node_id: NodeId,
-        timestamp: u64,
-    ) -> Self {
+    pub fn discovered(node_id: NodeId, timestamp: u64) -> Self {
         Self {
             node_id,
             state: PeerState::Discovered,
@@ -54,22 +51,12 @@ impl Peer {
         self.last_activity
     }
 
-    pub fn transition(
-        &mut self,
-        next: PeerState,
-        timestamp: u64,
-    ) {
+    pub fn transition(&mut self, next: PeerState, timestamp: u64) {
         self.state = next;
         self.last_activity = timestamp;
     }
 
-    pub fn fail(
-        &mut self,
-        timestamp: u64,
-    ) {
-        self.transition(
-            PeerState::Failed,
-            timestamp,
-        );
+    pub fn fail(&mut self, timestamp: u64) {
+        self.transition(PeerState::Failed, timestamp);
     }
 }

@@ -1,39 +1,26 @@
-﻿use crate::identity::fingerprint::Fingerprint;
-use ed25519_dalek::{SigningKey, VerifyingKey};
+use crate::identity::fingerprint::Fingerprint;
+use ed25519_dalek::{Signature, SigningKey, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// Length of an Ed25519 public key.
-pub const PUBLIC_KEY_LENGTH: usize = 32;
+pub const DEVICE_PUBLIC_KEY_SIZE: usize = 32;
+pub const DEVICE_ID_SIZE: usize = 32;
 
-/// Length of a device identifier.
-pub const DEVICE_ID_LENGTH: usize = 32;
-
-/// Cryptographic identifier for an Aether device.
-///
-/// A DeviceId does not contain hardware identifiers or personally
-/// identifiable information.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct DeviceId([u8; DEVICE_ID_LENGTH]);
+pub struct DeviceId([u8; DEVICE_ID_SIZE]);
 
 impl DeviceId {
-    /// Create a DeviceId from cryptographic material.
     pub fn from_public_key(public_key: &VerifyingKey) -> Self {
-        let fingerprint = Fingerprint::from_domain(
-            b"aether/device-id/v1",
-            public_key.as_bytes(),
-        );
+        let fingerprint = Fingerprint::from_domain(b"aether/device-id/v1", public_key.as_bytes());
 
         Self(*fingerprint.as_bytes())
     }
 
-    /// Return the raw identifier bytes.
-    pub fn as_bytes(&self) -> &[u8; DEVICE_ID_LENGTH] {
+    pub fn as_bytes(&self) -> &[u8; DEVICE_ID_SIZE] {
         &self.0
     }
 
-    /// Consume the identifier and return its raw bytes.
-    pub fn into_bytes(self) -> [u8; DEVICE_ID_LENGTH] {
+    pub fn into_bytes(self) -> [u8; DEVICE_ID_SIZE] {
         self.0
     }
 }
@@ -60,84 +47,125 @@ impl fmt::Display for DeviceId {
     }
 }
 
-/// Public cryptographic information belonging to an Aether device.
-///
-/// Private key material is deliberately excluded.
-#[derive(Clone, Serialize, Deserialize)]
-pub struct DevicePublicIdentity {
-    pub device_id: DeviceId,
-    pub public_key: [u8; PUBLIC_KEY_LENGTH],
-    pub created_at: u64,
+pub struct DeviceSigningKey {
+    signing_key: SigningKey,
 }
 
-/// Runtime device state.
-///
-/// Revocation is represented explicitly so a revoked device cannot continue
-/// participating in authenticated Aether operations.
-#[derive(Clone, Serialize, Deserialize)]
+impl DeviceSigningKey {
+    pub fn generate() -> Result<Self, DeviceError> {
+        let mut secret = [0u8; 32];
+
+        getrandom::fill(&mut secret).map_err(|_| DeviceError::RandomnessUnavailable)?;
+
+        Ok(Self {
+            signing_key: SigningKey::from_bytes(&secret),
+        })
+    }
+
+    pub fn verifying_key(&self) -> VerifyingKey {
+        self.signing_key.verifying_key()
+    }
+
+    pub fn device_id(&self) -> DeviceId {
+        DeviceId::from_public_key(&self.verifying_key())
+    }
+
+    pub fn sign(&self, message: &[u8]) -> Signature {
+        use ed25519_dalek::Signer;
+        self.signing_key.sign(message)
+    }
+
+    pub fn signing_key(&self) -> &SigningKey {
+        &self.signing_key
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceError {
+    RandomnessUnavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeviceCapabilities {
+    pub relay: bool,
+    pub gateway: bool,
+    pub storage: bool,
+    pub compute: bool,
+    pub emergency: bool,
+}
+
+impl Default for DeviceCapabilities {
+    fn default() -> Self {
+        Self {
+            relay: true,
+            gateway: false,
+            storage: false,
+            compute: false,
+            emergency: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DeviceStatus {
+    Active,
+    Suspended,
+    Revoked,
+    Recovery,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceState {
-    pub identity: DevicePublicIdentity,
-    pub revoked: bool,
-    pub revoked_at: Option<u64>,
+    pub device_id: DeviceId,
+    pub public_key: [u8; DEVICE_PUBLIC_KEY_SIZE],
+    pub created_at: u64,
+    pub status: DeviceStatus,
+    pub capabilities: DeviceCapabilities,
 }
 
 impl DeviceState {
-    /// Create a new device state from a generated signing key.
-    pub fn new(signing_key: &SigningKey, created_at: u64) -> Self {
-        let verifying_key = signing_key.verifying_key();
-        let device_id = DeviceId::from_public_key(&verifying_key);
+    pub fn from_signing_key(
+        signing_key: &DeviceSigningKey,
+        created_at: u64,
+        capabilities: DeviceCapabilities,
+    ) -> Self {
+        let public_key = signing_key.verifying_key();
 
         Self {
-            identity: DevicePublicIdentity {
-                device_id,
-                public_key: verifying_key.to_bytes(),
-                created_at,
-            },
-            revoked: false,
-            revoked_at: None,
+            device_id: DeviceId::from_public_key(&public_key),
+            public_key: public_key.to_bytes(),
+            created_at,
+            status: DeviceStatus::Active,
+            capabilities,
         }
     }
 
-    /// Return the device identifier.
-    pub fn device_id(&self) -> DeviceId {
-        self.identity.device_id
-    }
-
-    /// Return the public key.
     pub fn public_key(&self) -> Result<VerifyingKey, ed25519_dalek::SignatureError> {
-        VerifyingKey::from_bytes(&self.identity.public_key)
+        VerifyingKey::from_bytes(&self.public_key)
     }
 
-    /// Check whether this device is currently active.
     pub fn is_active(&self) -> bool {
-        !self.revoked
+        matches!(self.status, DeviceStatus::Active)
     }
 
-    /// Revoke this device.
-    pub fn revoke(&mut self, timestamp: u64) {
-        self.revoked = true;
-        self.revoked_at = Some(timestamp);
+    pub fn revoke(&mut self) {
+        self.status = DeviceStatus::Revoked;
+    }
+
+    pub fn suspend(&mut self) {
+        self.status = DeviceStatus::Suspended;
+    }
+
+    pub fn restore(&mut self) {
+        self.status = DeviceStatus::Active;
     }
 }
 
-/// Generate a fresh Ed25519 device key.
-///
-/// The private key remains in memory owned by the caller. It must be moved
-/// into the Aether secure storage layer before long-term persistence.
-pub fn generate_key() -> Result<SigningKey, getrandom::Error> {
-    let mut secret = [0u8; 32];
+pub fn generate_device(created_at: u64) -> Result<(DeviceSigningKey, DeviceState), DeviceError> {
+    let signing_key = DeviceSigningKey::generate()?;
 
-    getrandom::fill(&mut secret)?;
-
-    Ok(SigningKey::from_bytes(&secret))
-}
-
-/// Generate a new device identity.
-pub fn generate_device(
-    created_at: u64,
-) -> Result<(SigningKey, DeviceState), getrandom::Error> {
-    let signing_key = generate_key()?;
-    let state = DeviceState::new(&signing_key, created_at);
+    let state =
+        DeviceState::from_signing_key(&signing_key, created_at, DeviceCapabilities::default());
 
     Ok((signing_key, state))
 }

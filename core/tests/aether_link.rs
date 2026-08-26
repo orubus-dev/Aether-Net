@@ -1,53 +1,26 @@
-﻿use aether_core::identity::device::generate_device;
-use aether_core::link::{
-    LinkSession,
-    SessionNegotiation,
-    SessionRole,
-};
-use aether_core::network::{
-    NodeId,
-    PacketFlags,
-    MessageType,
-    TrafficPriority,
-};
+use aether_core::identity::device::generate_device;
+use aether_core::link::{SessionNegotiation, SessionRole};
+use aether_core::network::{MessageType, NodeId, PacketFlags, TrafficPriority};
 
 #[test]
 fn two_peers_derive_compatible_session_keys() {
-    let (_, device_a) =
-        generate_device(1000)
-            .expect("device A generation failed");
+    let (_, device_a) = generate_device(1000).expect("device A generation failed");
 
-    let (_, device_b) =
-        generate_device(1000)
-            .expect("device B generation failed");
+    let (_, device_b) = generate_device(1000).expect("device B generation failed");
 
-    let node_a =
-        NodeId::from_device(&device_a);
+    let node_a = NodeId::from_device(&device_a);
 
-    let node_b =
-        NodeId::from_device(&device_b);
+    let node_b = NodeId::from_device(&device_b);
 
     let initiator =
-        SessionNegotiation::create(
-            SessionRole::Initiator,
-        )
-        .expect("initiator creation failed");
+        SessionNegotiation::create(SessionRole::Initiator).expect("initiator creation failed");
 
     let responder =
-        SessionNegotiation::create(
-            SessionRole::Responder,
-        )
-        .expect("responder creation failed");
+        SessionNegotiation::create(SessionRole::Responder).expect("responder creation failed");
 
-    let initiator_public =
-        initiator
-            .local_ephemeral
-            .public_key();
+    let initiator_public = initiator.local_ephemeral.public_key();
 
-    let responder_public =
-        responder
-            .local_ephemeral
-            .public_key();
+    let responder_public = responder.local_ephemeral.public_key();
 
     let transcript: Vec<&[u8]> = vec![
         b"AETHER-LINK-TEST",
@@ -57,31 +30,18 @@ fn two_peers_derive_compatible_session_keys() {
         responder_public.as_bytes(),
     ];
 
-    let mut a =
-        initiator
-            .finish(
-                &responder_public,
-                &transcript,
-                node_a,
-                node_b,
-            )
-            .expect("initiator session failed");
+    let mut a = initiator
+        .finish(&responder_public, &transcript, node_a, node_b)
+        .expect("initiator session failed");
 
-    let mut b =
-        responder
-            .finish(
-                &initiator_public,
-                &transcript,
-                node_a,
-                node_b,
-            )
-            .expect("responder session failed");
+    let mut b = responder
+        .finish(&initiator_public, &transcript, node_a, node_b)
+        .expect("responder session failed");
 
-    let plaintext =
-        b"Aether secure transport";
+    let plaintext = b"Aether secure transport";
 
-    let frame =
-        a.encrypt(
+    let frame = a
+        .encrypt(
             MessageType::Data,
             TrafficPriority::Messaging,
             PacketFlags::RELAYABLE,
@@ -89,53 +49,30 @@ fn two_peers_derive_compatible_session_keys() {
         )
         .expect("encryption failed");
 
-    let decrypted =
-        b.decrypt(&frame)
-            .expect("decryption failed");
+    let decrypted = b.decrypt(&frame).expect("decryption failed");
 
-    assert_eq!(
-        decrypted.payload,
-        plaintext
-    );
+    assert_eq!(decrypted.payload, plaintext);
 }
 
 #[test]
 fn encrypted_frame_rejects_tampering() {
-    let (_, device_a) =
-        generate_device(1000)
-            .expect("device A generation failed");
+    let (_, device_a) = generate_device(1000).expect("device A generation failed");
 
-    let (_, device_b) =
-        generate_device(1000)
-            .expect("device B generation failed");
+    let (_, device_b) = generate_device(1000).expect("device B generation failed");
 
-    let node_a =
-        NodeId::from_device(&device_a);
+    let node_a = NodeId::from_device(&device_a);
 
-    let node_b =
-        NodeId::from_device(&device_b);
+    let node_b = NodeId::from_device(&device_b);
 
     let initiator =
-        SessionNegotiation::create(
-            SessionRole::Initiator,
-        )
-        .expect("initiator creation failed");
+        SessionNegotiation::create(SessionRole::Initiator).expect("initiator creation failed");
 
     let responder =
-        SessionNegotiation::create(
-            SessionRole::Responder,
-        )
-        .expect("responder creation failed");
+        SessionNegotiation::create(SessionRole::Responder).expect("responder creation failed");
 
-    let initiator_public =
-        initiator
-            .local_ephemeral
-            .public_key();
+    let initiator_public = initiator.local_ephemeral.public_key();
 
-    let responder_public =
-        responder
-            .local_ephemeral
-            .public_key();
+    let responder_public = responder.local_ephemeral.public_key();
 
     let transcript: Vec<&[u8]> = vec![
         b"AETHER-LINK-TAMPER-TEST",
@@ -145,86 +82,52 @@ fn encrypted_frame_rejects_tampering() {
         responder_public.as_bytes(),
     ];
 
-    let mut sender =
-        initiator
-            .finish(
-                &responder_public,
-                &transcript,
-                node_a,
-                node_b,
-            )
-            .expect("sender session failed");
+    let mut sender = initiator
+        .finish(&responder_public, &transcript, node_a, node_b)
+        .expect("sender session failed");
 
-    let mut receiver =
-        responder
-            .finish(
-                &initiator_public,
-                &transcript,
-                node_a,
-                node_b,
-            )
-            .expect("receiver session failed");
+    let mut receiver = responder
+        .finish(&initiator_public, &transcript, node_a, node_b)
+        .expect("receiver session failed");
 
-    let mut frame =
-        sender
-            .encrypt(
-                MessageType::Data,
-                TrafficPriority::Messaging,
-                PacketFlags::RELAYABLE,
-                b"secret",
-            )
-            .expect("encryption failed");
+    let mut frame = sender
+        .encrypt(
+            MessageType::Data,
+            TrafficPriority::Messaging,
+            PacketFlags::RELAYABLE,
+            b"secret",
+        )
+        .expect("encryption failed");
 
-    let last =
-        frame
-            .len()
-            .checked_sub(1)
-            .expect("frame should not be empty");
+    let last = frame
+        .len()
+        .checked_sub(1)
+        .expect("frame should not be empty");
 
     frame[last] ^= 0x01;
 
-    assert!(
-        receiver.decrypt(&frame).is_err()
-    );
+    assert!(receiver.decrypt(&frame).is_err());
 }
 
 #[test]
 fn replayed_frame_is_rejected() {
-    let (_, device_a) =
-        generate_device(1000)
-            .expect("device A generation failed");
+    let (_, device_a) = generate_device(1000).expect("device A generation failed");
 
-    let (_, device_b) =
-        generate_device(1000)
-            .expect("device B generation failed");
+    let (_, device_b) = generate_device(1000).expect("device B generation failed");
 
-    let node_a =
-        NodeId::from_device(&device_a);
+    let node_a = NodeId::from_device(&device_a);
 
-    let node_b =
-        NodeId::from_device(&device_b);
+    let node_b = NodeId::from_device(&device_b);
 
     let initiator =
-        SessionNegotiation::create(
-            SessionRole::Initiator,
-        )
-        .expect("initiator creation failed");
+        SessionNegotiation::create(SessionRole::Initiator).expect("initiator creation failed");
 
     let responder =
-        SessionNegotiation::create(
-            SessionRole::Responder,
-        )
-        .expect("responder creation failed");
+        SessionNegotiation::create(SessionRole::Responder).expect("responder creation failed");
 
-    let initiator_public =
-        initiator
-            .local_ephemeral
-            .public_key();
+    let initiator_public = initiator.local_ephemeral.public_key();
 
-    let responder_public =
-        responder
-            .local_ephemeral
-            .public_key();
+    let responder_public = responder.local_ephemeral.public_key();
 
     let transcript: Vec<&[u8]> = vec![
         b"AETHER-LINK-REPLAY-TEST",
@@ -234,82 +137,49 @@ fn replayed_frame_is_rejected() {
         responder_public.as_bytes(),
     ];
 
-    let mut sender =
-        initiator
-            .finish(
-                &responder_public,
-                &transcript,
-                node_a,
-                node_b,
-            )
-            .expect("sender session failed");
+    let mut sender = initiator
+        .finish(&responder_public, &transcript, node_a, node_b)
+        .expect("sender session failed");
 
-    let mut receiver =
-        responder
-            .finish(
-                &initiator_public,
-                &transcript,
-                node_a,
-                node_b,
-            )
-            .expect("receiver session failed");
+    let mut receiver = responder
+        .finish(&initiator_public, &transcript, node_a, node_b)
+        .expect("receiver session failed");
 
-    let frame =
-        sender
-            .encrypt(
-                MessageType::Data,
-                TrafficPriority::Messaging,
-                PacketFlags::RELAYABLE,
-                b"one-time payload",
-            )
-            .expect("encryption failed");
+    let frame = sender
+        .encrypt(
+            MessageType::Data,
+            TrafficPriority::Messaging,
+            PacketFlags::RELAYABLE,
+            b"one-time payload",
+        )
+        .expect("encryption failed");
 
     receiver
         .decrypt(&frame)
         .expect("first delivery should succeed");
 
-    assert!(
-        receiver.decrypt(&frame).is_err()
-    );
+    assert!(receiver.decrypt(&frame).is_err());
 }
 
 #[test]
 fn session_uses_different_directional_keys() {
-    let (_, device_a) =
-        generate_device(1000)
-            .expect("device A generation failed");
+    let (_, device_a) = generate_device(1000).expect("device A generation failed");
 
-    let (_, device_b) =
-        generate_device(1000)
-            .expect("device B generation failed");
+    let (_, device_b) = generate_device(1000).expect("device B generation failed");
 
-    let node_a =
-        NodeId::from_device(&device_a);
+    let node_a = NodeId::from_device(&device_a);
 
-    let node_b =
-        NodeId::from_device(&device_b);
+    let node_b = NodeId::from_device(&device_b);
 
     let initiator =
-        SessionNegotiation::create(
-            SessionRole::Initiator,
-        )
-        .expect("initiator creation failed");
+        SessionNegotiation::create(SessionRole::Initiator).expect("initiator creation failed");
 
     let responder =
-        SessionNegotiation::create(
-            SessionRole::Responder,
-        )
-        .expect("responder creation failed");
+        SessionNegotiation::create(SessionRole::Responder).expect("responder creation failed");
 
-    let initiator_public =
-        initiator
-            .local_ephemeral
-            .public_key();
+    let initiator_public = initiator.local_ephemeral.public_key();
 
-    let responder_public =
-        responder
-            .local_ephemeral
-            .public_key();
+    let responder_public = responder.local_ephemeral.public_key();
 
     let transcript: Vec<&[u8]> = vec![
         b"AETHER-LINK-DIRECTION-TEST",
@@ -319,28 +189,13 @@ fn session_uses_different_directional_keys() {
         responder_public.as_bytes(),
     ];
 
-    let a =
-        initiator
-            .finish(
-                &responder_public,
-                &transcript,
-                node_a,
-                node_b,
-            )
-            .expect("initiator session failed");
+    let a = initiator
+        .finish(&responder_public, &transcript, node_a, node_b)
+        .expect("initiator session failed");
 
-    let b =
-        responder
-            .finish(
-                &initiator_public,
-                &transcript,
-                node_a,
-                node_b,
-            )
-            .expect("responder session failed");
+    let b = responder
+        .finish(&initiator_public, &transcript, node_a, node_b)
+        .expect("responder session failed");
 
-    assert_eq!(
-        a.session_id(),
-        b.session_id()
-    );
+    assert_eq!(a.session_id(), b.session_id());
 }

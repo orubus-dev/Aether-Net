@@ -1,4 +1,4 @@
-﻿use crate::identity::device::{DeviceId, DeviceState};
+use crate::identity::device::{DeviceId, DeviceState};
 use crate::identity::fingerprint::Fingerprint;
 use crate::network::capabilities::NodeCapabilities;
 use crate::network::protocol::ProtocolVersion;
@@ -11,13 +11,8 @@ pub const NODE_ID_LENGTH: usize = 32;
 pub struct NodeId([u8; NODE_ID_LENGTH]);
 
 impl NodeId {
-    pub fn from_device(
-        device: &DeviceState,
-    ) -> Self {
-        let fingerprint = Fingerprint::from_domain(
-            b"aether/node-id/v1",
-            &device.identity.public_key,
-        );
+    pub fn from_device(device: &DeviceState) -> Self {
+        let fingerprint = Fingerprint::from_domain(b"aether/node-id/v1", &device.public_key);
 
         Self(*fingerprint.as_bytes())
     }
@@ -32,10 +27,7 @@ impl NodeId {
 }
 
 impl fmt::Debug for NodeId {
-    fn fmt(
-        &self,
-        formatter: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("NodeId(")?;
 
         for byte in &self.0 {
@@ -47,10 +39,7 @@ impl fmt::Debug for NodeId {
 }
 
 impl fmt::Display for NodeId {
-    fn fmt(
-        &self,
-        formatter: &mut fmt::Formatter<'_>,
-    ) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         for byte in &self.0 {
             write!(formatter, "{byte:02x}")?;
         }
@@ -88,7 +77,7 @@ impl NodeDescriptor {
     ) -> Self {
         Self {
             node_id: NodeId::from_device(device),
-            device_id: device.identity.device_id,
+            device_id: device.device_id,
             protocol: ProtocolVersion::CURRENT,
             capabilities,
             role,

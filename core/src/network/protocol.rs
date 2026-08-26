@@ -1,4 +1,4 @@
-﻿use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 pub const PROTOCOL_MAGIC: [u8; 4] = *b"AETH";
 
@@ -23,8 +23,6 @@ impl ProtocolVersion {
         Self { major, minor }
     }
 
-    /// Compatible means the major protocol is identical and the remote
-    /// minor version does not require unsupported semantics.
     pub const fn is_compatible_with(self, other: Self) -> bool {
         self.major == other.major
     }
@@ -46,6 +44,8 @@ pub enum MessageType {
     ServiceAdvertisement = 11,
     Disconnect = 12,
     Error = 13,
+    Rekey = 14,
+    RekeyAck = 15,
 }
 
 impl MessageType {
@@ -64,6 +64,8 @@ impl MessageType {
             11 => Some(Self::ServiceAdvertisement),
             12 => Some(Self::Disconnect),
             13 => Some(Self::Error),
+            14 => Some(Self::Rekey),
+            15 => Some(Self::RekeyAck),
             _ => None,
         }
     }
@@ -101,10 +103,15 @@ pub struct PacketFlags(pub u16);
 
 impl PacketFlags {
     pub const NONE: Self = Self(0);
+
     pub const ENCRYPTED: Self = Self(1 << 0);
+
     pub const RELAYABLE: Self = Self(1 << 1);
+
     pub const ACK_REQUIRED: Self = Self(1 << 2);
+
     pub const FRAGMENT: Self = Self(1 << 3);
+
     pub const FINAL_FRAGMENT: Self = Self(1 << 4);
 
     pub const fn bits(self) -> u16 {

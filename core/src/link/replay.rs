@@ -1,4 +1,4 @@
-﻿#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct ReplayWindow {
     highest: Option<u64>,
     bitmap: u64,
@@ -25,10 +25,7 @@ impl ReplayWindow {
         self.bitmap = 0;
     }
 
-    pub fn accept(
-        &mut self,
-        counter: u64,
-    ) -> bool {
+    pub fn accept(&mut self, counter: u64) -> bool {
         let Some(highest) = self.highest else {
             self.highest = Some(counter);
             self.bitmap = 1;
@@ -36,14 +33,12 @@ impl ReplayWindow {
         };
 
         if counter > highest {
-            let shift =
-                counter - highest;
+            let shift = counter - highest;
 
             if shift >= Self::WINDOW_SIZE {
                 self.bitmap = 1;
             } else {
-                self.bitmap =
-                    (self.bitmap << shift) | 1;
+                self.bitmap = (self.bitmap << shift) | 1;
             }
 
             self.highest = Some(counter);
@@ -51,15 +46,13 @@ impl ReplayWindow {
             return true;
         }
 
-        let distance =
-            highest - counter;
+        let distance = highest - counter;
 
         if distance >= Self::WINDOW_SIZE {
             return false;
         }
 
-        let mask =
-            1u64 << distance;
+        let mask = 1u64 << distance;
 
         if self.bitmap & mask != 0 {
             return false;

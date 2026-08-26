@@ -1,17 +1,9 @@
-﻿use crate::network::node::NodeId;
-use ed25519_dalek::{
-    Signature,
-    Signer,
-    SigningKey,
-    Verifier,
-    VerifyingKey,
-};
+use crate::network::node::NodeId;
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use hkdf::Hkdf;
 use sha2::{Digest, Sha256};
-use x25519_dalek::{
-    PublicKey as X25519PublicKey,
-    StaticSecret,
-};
+use sha2_legacy::Sha256 as HkdfSha256;
+use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret};
 use zeroize::Zeroizing;
 
 pub const EPHEMERAL_PUBLIC_KEY_LENGTH: usize = 32;
@@ -22,7 +14,9 @@ const NONCE_PREFIX_LENGTH: usize = 4;
 const KEY_MATERIAL_LENGTH: usize = 104;
 
 const LINK_DOMAIN: &[u8] = b"AETHER-LINK-V1";
+
 const KDF_INFO: &[u8] = b"AETHER-LINK-SESSION-KEYS-V1";
+
 const REKEY_INFO: &[u8] = b"AETHER-LINK-REKEY-V1";
 
 #[derive(Debug)]
@@ -43,10 +37,10 @@ impl EphemeralKey {
     pub fn generate() -> Result<Self, CryptoError> {
         let mut secret_bytes = [0u8; 32];
 
-        getrandom::fill(&mut secret_bytes)
-            .map_err(|_| CryptoError::RandomnessUnavailable)?;
+        getrandom::fill(&mut secret_bytes).map_err(|_| CryptoError::RandomnessUnavailable)?;
 
         let secret = StaticSecret::from(secret_bytes);
+
         let public = X25519PublicKey::from(&secret);
 
         Ok(Self { secret, public })
@@ -56,15 +50,8 @@ impl EphemeralKey {
         self.public
     }
 
-    pub fn derive_shared_secret(
-        &self,
-        remote_public: &X25519PublicKey,
-    ) -> Zeroizing<[u8; 32]> {
-        Zeroizing::new(
-            self.secret
-                .diffie_hellman(remote_public)
-                .to_bytes(),
-        )
+    pub fn derive_shared_secret(&self, remote_public: &X25519PublicKey) -> Zeroizing<[u8; 32]> {
+        Zeroizing::new(self.secret.diffie_hellman(remote_public).to_bytes())
     }
 }
 
@@ -76,13 +63,8 @@ pub fn sign_key_exchange(
     ephemeral_public: &X25519PublicKey,
     timestamp: u64,
 ) -> Signature {
-    let transcript = key_exchange_transcript(
-        node_id,
-        device_id,
-        challenge,
-        ephemeral_public,
-        timestamp,
-    );
+    let transcript =
+        key_exchange_transcript(node_id, device_id, challenge, ephemeral_public, timestamp);
 
     signing_key.sign(&transcript)
 }
@@ -96,17 +78,10 @@ pub fn verify_key_exchange(
     timestamp: u64,
     signature: &Signature,
 ) -> bool {
-    let transcript = key_exchange_transcript(
-        node_id,
-        device_id,
-        challenge,
-        ephemeral_public,
-        timestamp,
-    );
+    let transcript =
+        key_exchange_transcript(node_id, device_id, challenge, ephemeral_public, timestamp);
 
-    public_key
-        .verify(&transcript, signature)
-        .is_ok()
+    public_key.verify(&transcript, signature).is_ok()
 }
 
 pub fn derive_session_keys(
@@ -116,66 +91,36 @@ pub fn derive_session_keys(
     responder: NodeId,
     is_initiator: bool,
 ) -> Result<SessionKeys, CryptoError> {
-    let hkdf =
-        Hkdf::<Sha256>::new(
-            Some(transcript_hash),
-            shared_secret,
-        );
+    let hkdf = Hkdf::<HkdfSha256>::new(Some(transcript_hash), shared_secret);
 
-    let mut material =
-        [0u8; KEY_MATERIAL_LENGTH];
+    let mut material = [0u8; KEY_MATERIAL_LENGTH];
 
-    hkdf.expand(
-        KDF_INFO,
-        &mut material,
-    )
-    .map_err(|_| CryptoError::KeyDerivationFailed)?;
+    hkdf.expand(KDF_INFO, &mut material)
+        .map_err(|_| CryptoError::KeyDerivationFailed)?;
 
     let mut initiator_key = [0u8; KEY_LENGTH];
+
     let mut responder_key = [0u8; KEY_LENGTH];
 
-    let mut initiator_nonce =
-        [0u8; NONCE_PREFIX_LENGTH];
+    let mut initiator_nonce = [0u8; NONCE_PREFIX_LENGTH];
 
-    let mut responder_nonce =
-        [0u8; NONCE_PREFIX_LENGTH];
+    let mut responder_nonce = [0u8; NONCE_PREFIX_LENGTH];
 
-    let mut rekey_secret =
-        [0u8; KEY_LENGTH];
+    let mut rekey_secret = [0u8; KEY_LENGTH];
 
-    initiator_key.copy_from_slice(
-        &material[0..32],
-    );
+    initiator_key.copy_from_slice(&material[0..32]);
 
-    responder_key.copy_from_slice(
-        &material[32..64],
-    );
+    responder_key.copy_from_slice(&material[32..64]);
 
-    initiator_nonce.copy_from_slice(
-        &material[64..68],
-    );
+    initiator_nonce.copy_from_slice(&material[64..68]);
 
-    responder_nonce.copy_from_slice(
-        &material[68..72],
-    );
+    responder_nonce.copy_from_slice(&material[68..72]);
 
-    rekey_secret.copy_from_slice(
-        &material[72..104],
-    );
+    rekey_secret.copy_from_slice(&material[72..104]);
 
-    let session_id =
-        session_id(
-            transcript_hash,
-            initiator,
-            responder,
-        );
+    let session_id = session_id(transcript_hash, initiator, responder);
 
-    let (
-        send_key,
-        recv_key,
-        send_nonce_prefix,
-        recv_nonce_prefix,
-    ) = directional_material(
+    let (send_key, recv_key, send_nonce_prefix, recv_nonce_prefix) = directional_material(
         &initiator_key,
         &responder_key,
         &initiator_nonce,
@@ -202,65 +147,36 @@ pub fn rekey_session_keys(
         return Err(CryptoError::RekeyEpochExpired);
     }
 
-    let hkdf =
-        Hkdf::<Sha256>::new(
-            Some(&current.session_id),
-            current.rekey_secret.as_ref(),
-        );
+    let hkdf = Hkdf::<HkdfSha256>::new(Some(&current.session_id), current.rekey_secret.as_ref());
 
-    let mut info =
-        Vec::with_capacity(
-            REKEY_INFO.len() + 8,
-        );
+    let mut info = Vec::with_capacity(REKEY_INFO.len() + 8);
 
     info.extend_from_slice(REKEY_INFO);
-    info.extend_from_slice(
-        &next_epoch.to_be_bytes(),
-    );
 
-    let mut material =
-        [0u8; 72];
+    info.extend_from_slice(&next_epoch.to_be_bytes());
 
-    hkdf.expand(
-        &info,
-        &mut material,
-    )
-    .map_err(|_| CryptoError::KeyDerivationFailed)?;
+    let mut material = [0u8; 72];
 
-    let mut initiator_key =
-        [0u8; KEY_LENGTH];
+    hkdf.expand(&info, &mut material)
+        .map_err(|_| CryptoError::KeyDerivationFailed)?;
 
-    let mut responder_key =
-        [0u8; KEY_LENGTH];
+    let mut initiator_key = [0u8; KEY_LENGTH];
 
-    let mut initiator_nonce =
-        [0u8; NONCE_PREFIX_LENGTH];
+    let mut responder_key = [0u8; KEY_LENGTH];
 
-    let mut responder_nonce =
-        [0u8; NONCE_PREFIX_LENGTH];
+    let mut initiator_nonce = [0u8; NONCE_PREFIX_LENGTH];
 
-    initiator_key.copy_from_slice(
-        &material[0..32],
-    );
+    let mut responder_nonce = [0u8; NONCE_PREFIX_LENGTH];
 
-    responder_key.copy_from_slice(
-        &material[32..64],
-    );
+    initiator_key.copy_from_slice(&material[0..32]);
 
-    initiator_nonce.copy_from_slice(
-        &material[64..68],
-    );
+    responder_key.copy_from_slice(&material[32..64]);
 
-    responder_nonce.copy_from_slice(
-        &material[68..72],
-    );
+    initiator_nonce.copy_from_slice(&material[64..68]);
 
-    let (
-        send_key,
-        recv_key,
-        send_nonce_prefix,
-        recv_nonce_prefix,
-    ) = directional_material(
+    responder_nonce.copy_from_slice(&material[68..72]);
+
+    let (send_key, recv_key, send_nonce_prefix, recv_nonce_prefix) = directional_material(
         &initiator_key,
         &responder_key,
         &initiator_nonce,
@@ -282,11 +198,17 @@ pub fn rekey_session_keys(
 #[derive(Clone)]
 pub struct SessionKeys {
     pub session_id: [u8; SESSION_ID_LENGTH],
+
     pub send_key: Zeroizing<[u8; KEY_LENGTH]>,
+
     pub recv_key: Zeroizing<[u8; KEY_LENGTH]>,
+
     pub send_nonce_prefix: [u8; NONCE_PREFIX_LENGTH],
+
     pub recv_nonce_prefix: [u8; NONCE_PREFIX_LENGTH],
+
     pub(crate) rekey_secret: Zeroizing<[u8; KEY_LENGTH]>,
+
     pub(crate) is_initiator: bool,
 }
 
@@ -326,52 +248,27 @@ fn key_exchange_transcript(
     ephemeral_public: &X25519PublicKey,
     timestamp: u64,
 ) -> Vec<u8> {
-    let mut bytes =
-        Vec::with_capacity(
-            LINK_DOMAIN.len()
-                + 32
-                + 32
-                + 32
-                + 32
-                + 8,
-        );
+    let mut bytes = Vec::with_capacity(LINK_DOMAIN.len() + 32 + 32 + 32 + 32 + 8);
 
-    bytes.extend_from_slice(
-        LINK_DOMAIN,
-    );
+    bytes.extend_from_slice(LINK_DOMAIN);
 
-    bytes.extend_from_slice(
-        node_id.as_bytes(),
-    );
+    bytes.extend_from_slice(node_id.as_bytes());
 
-    bytes.extend_from_slice(
-        device_id,
-    );
+    bytes.extend_from_slice(device_id);
 
-    bytes.extend_from_slice(
-        challenge,
-    );
+    bytes.extend_from_slice(challenge);
 
-    bytes.extend_from_slice(
-        ephemeral_public.as_bytes(),
-    );
+    bytes.extend_from_slice(ephemeral_public.as_bytes());
 
-    bytes.extend_from_slice(
-        &timestamp.to_be_bytes(),
-    );
+    bytes.extend_from_slice(&timestamp.to_be_bytes());
 
     bytes
 }
 
-pub fn transcript_hash(
-    transcript_parts: &[&[u8]],
-) -> [u8; 32] {
-    let mut hasher =
-        Sha256::new();
+pub fn transcript_hash(transcript_parts: &[&[u8]]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
 
-    hasher.update(
-        b"AETHER-LINK-TRANSCRIPT-V1",
-    );
+    hasher.update(b"AETHER-LINK-TRANSCRIPT-V1");
 
     for part in transcript_parts {
         hasher.update(part);
@@ -386,34 +283,21 @@ fn session_id(
     initiator: NodeId,
     responder: NodeId,
 ) -> [u8; SESSION_ID_LENGTH] {
-    let mut hasher =
-        Sha256::new();
+    let mut hasher = Sha256::new();
 
-    hasher.update(
-        b"AETHER-LINK-SESSION-ID-V1",
-    );
+    hasher.update(b"AETHER-LINK-SESSION-ID-V1");
 
-    hasher.update(
-        transcript_hash,
-    );
+    hasher.update(transcript_hash);
 
-    hasher.update(
-        initiator.as_bytes(),
-    );
+    hasher.update(initiator.as_bytes());
 
-    hasher.update(
-        responder.as_bytes(),
-    );
+    hasher.update(responder.as_bytes());
 
-    let digest =
-        hasher.finalize();
+    let digest = hasher.finalize();
 
-    let mut result =
-        [0u8; SESSION_ID_LENGTH];
+    let mut result = [0u8; SESSION_ID_LENGTH];
 
-    result.copy_from_slice(
-        &digest[..SESSION_ID_LENGTH],
-    );
+    result.copy_from_slice(&digest[..SESSION_ID_LENGTH]);
 
     result
 }

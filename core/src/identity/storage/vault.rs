@@ -1,17 +1,12 @@
-﻿use argon2::Argon2;
+use argon2::Argon2;
 use chacha20poly1305::{
+    ChaCha20Poly1305, Nonce,
     aead::{Aead, KeyInit},
-    ChaCha20Poly1305,
-    Nonce,
 };
 use getrandom;
 use zeroize::Zeroizing;
 
-use super::format::{
-    VaultEnvelope,
-    VAULT_NONCE_LENGTH,
-    VAULT_SALT_LENGTH,
-};
+use super::format::{VAULT_NONCE_LENGTH, VAULT_SALT_LENGTH, VaultEnvelope};
 
 const VAULT_AAD: &[u8] = b"AETHER-IDENTITY-VAULT-V1";
 
@@ -40,10 +35,7 @@ impl From<std::io::Error> for VaultError {
 pub struct IdentityVault;
 
 impl IdentityVault {
-    pub fn encrypt(
-        plaintext: &[u8],
-        secret: &[u8],
-    ) -> Result<Vec<u8>, VaultError> {
+    pub fn encrypt(plaintext: &[u8], secret: &[u8]) -> Result<Vec<u8>, VaultError> {
         let salt = generate_random(VAULT_SALT_LENGTH)?;
         let nonce = generate_random(VAULT_NONCE_LENGTH)?;
 
@@ -64,23 +56,14 @@ impl IdentityVault {
             )
             .map_err(|_| VaultError::EncryptionFailed)?;
 
-        let envelope = VaultEnvelope::new(
-            salt,
-            nonce,
-            ciphertext,
-        );
+        let envelope = VaultEnvelope::new(salt, nonce, ciphertext);
 
-        serde_json::to_vec(&envelope)
-            .map_err(|_| VaultError::SerializationFailed)
+        serde_json::to_vec(&envelope).map_err(|_| VaultError::SerializationFailed)
     }
 
-    pub fn decrypt(
-        encoded: &[u8],
-        secret: &[u8],
-    ) -> Result<Vec<u8>, VaultError> {
+    pub fn decrypt(encoded: &[u8], secret: &[u8]) -> Result<Vec<u8>, VaultError> {
         let envelope: VaultEnvelope =
-            serde_json::from_slice(encoded)
-                .map_err(|_| VaultError::DeserializationFailed)?;
+            serde_json::from_slice(encoded).map_err(|_| VaultError::DeserializationFailed)?;
 
         if !envelope.validate() {
             return Err(VaultError::InvalidEnvelope);
@@ -122,10 +105,7 @@ impl IdentityVault {
         Ok(())
     }
 
-    pub fn load(
-        path: impl AsRef<std::path::Path>,
-        secret: &[u8],
-    ) -> Result<Vec<u8>, VaultError> {
+    pub fn load(path: impl AsRef<std::path::Path>, secret: &[u8]) -> Result<Vec<u8>, VaultError> {
         let encoded = std::fs::read(path)?;
 
         Self::decrypt(&encoded, secret)
@@ -135,24 +115,16 @@ impl IdentityVault {
 fn generate_random(length: usize) -> Result<Vec<u8>, VaultError> {
     let mut bytes = vec![0u8; length];
 
-    getrandom::fill(&mut bytes)
-        .map_err(|_| VaultError::RandomnessUnavailable)?;
+    getrandom::fill(&mut bytes).map_err(|_| VaultError::RandomnessUnavailable)?;
 
     Ok(bytes)
 }
 
-fn derive_key(
-    secret: &[u8],
-    salt: &[u8],
-) -> Result<Zeroizing<[u8; 32]>, VaultError> {
+fn derive_key(secret: &[u8], salt: &[u8]) -> Result<Zeroizing<[u8; 32]>, VaultError> {
     let mut key = Zeroizing::new([0u8; 32]);
 
     Argon2::default()
-        .hash_password_into(
-            secret,
-            salt,
-            key.as_mut(),
-        )
+        .hash_password_into(secret, salt, key.as_mut())
         .map_err(|_| VaultError::KeyDerivationFailed)?;
 
     Ok(key)
