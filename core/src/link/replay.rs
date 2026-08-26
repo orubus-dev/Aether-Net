@@ -1,8 +1,4 @@
-﻿/// Sliding replay window for encrypted AetherLink frames.
-///
-/// The window allows limited packet reordering while rejecting replayed
-/// counters and packets that fall outside the accepted window.
-#[derive(Debug, Clone, Copy)]
+﻿#[derive(Debug, Clone, Copy)]
 pub struct ReplayWindow {
     highest: Option<u64>,
     bitmap: u64,
@@ -24,8 +20,15 @@ impl ReplayWindow {
         }
     }
 
-    /// Returns true only if the counter has not already been accepted.
-    pub fn accept(&mut self, counter: u64) -> bool {
+    pub fn reset(&mut self) {
+        self.highest = None;
+        self.bitmap = 0;
+    }
+
+    pub fn accept(
+        &mut self,
+        counter: u64,
+    ) -> bool {
         let Some(highest) = self.highest else {
             self.highest = Some(counter);
             self.bitmap = 1;
@@ -33,7 +36,8 @@ impl ReplayWindow {
         };
 
         if counter > highest {
-            let shift = counter - highest;
+            let shift =
+                counter - highest;
 
             if shift >= Self::WINDOW_SIZE {
                 self.bitmap = 1;

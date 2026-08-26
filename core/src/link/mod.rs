@@ -1,11 +1,19 @@
-﻿pub mod crypto;
+﻿pub mod control;
+pub mod crypto;
 pub mod frame;
 pub mod manager;
 pub mod replay;
 pub mod session;
 
+pub use control::{
+    CloseReason,
+    ControlError,
+    ControlMessage,
+};
+
 pub use crypto::{
     derive_session_keys,
+    rekey_session_keys,
     sign_key_exchange,
     verify_key_exchange,
     CryptoError,
