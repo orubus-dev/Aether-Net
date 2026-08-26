@@ -1,5 +1,6 @@
 ﻿pub mod crypto;
 pub mod frame;
+pub mod manager;
 pub mod replay;
 pub mod session;
 
@@ -17,6 +18,13 @@ pub use frame::{
     FrameError,
     FrameHeader,
     LinkSession,
+};
+
+pub use manager::{
+    ManagedSession,
+    SessionId,
+    SessionManager,
+    SessionManagerError,
 };
 
 pub use replay::ReplayWindow;

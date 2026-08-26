@@ -13,10 +13,17 @@ use chacha20poly1305::{
 
 pub const LINK_MAGIC: [u8; 4] = *b"AEL1";
 pub const LINK_VERSION: u8 = 1;
-pub const LINK_HEADER_LENGTH: usize = 16;
+
+/// 4 magic + 1 version + 1 type + 1 priority +
+/// 2 flags + 8 counter + 4 ciphertext length.
+pub const LINK_HEADER_LENGTH: usize = 21;
+
 pub const MAX_LINK_PAYLOAD: usize = 65_535;
 
-#[derive(Debug)]
+const NONCE_PREFIX_LENGTH: usize = 4;
+const COUNTER_LENGTH: usize = 8;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FrameError {
     InvalidHeader,
     InvalidMagic,
@@ -31,7 +38,7 @@ pub enum FrameError {
     CounterExhausted,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FrameHeader {
     pub message_type: MessageType,
     pub priority: TrafficPriority,
@@ -41,40 +48,17 @@ pub struct FrameHeader {
 }
 
 impl FrameHeader {
-    pub fn encode(
-        &self,
-        session_id: &[u8; 16],
-    ) -> Vec<u8> {
-        let mut output =
-            Vec::with_capacity(
-                LINK_HEADER_LENGTH,
-            );
+    pub fn encode(&self) -> [u8; LINK_HEADER_LENGTH] {
+        let mut output = [0u8; LINK_HEADER_LENGTH];
 
-        output.extend_from_slice(
-            &LINK_MAGIC,
-        );
-
-        output.push(LINK_VERSION);
-        output.push(
-            self.message_type as u8,
-        );
-        output.push(
-            self.priority as u8,
-        );
-
-        output.extend_from_slice(
-            &self.flags.bits().to_be_bytes(),
-        );
-
-        output.extend_from_slice(
-            &self.counter.to_be_bytes(),
-        );
-
-        output.extend_from_slice(
-            &self.ciphertext_length.to_be_bytes(),
-        );
-
-        let _ = session_id;
+        output[0..4].copy_from_slice(&LINK_MAGIC);
+        output[4] = LINK_VERSION;
+        output[5] = self.message_type as u8;
+        output[6] = self.priority as u8;
+        output[7..9].copy_from_slice(&self.flags.bits().to_be_bytes());
+        output[9..17].copy_from_slice(&self.counter.to_be_bytes());
+        output[17..21]
+            .copy_from_slice(&self.ciphertext_length.to_be_bytes());
 
         output
     }
@@ -106,77 +90,65 @@ impl LinkSession {
         flags: PacketFlags,
         plaintext: &[u8],
     ) -> Result<Vec<u8>, FrameError> {
-        if plaintext.len() > MAX_LINK_PAYLOAD {
+        if plaintext.len() > MAX_LINK_PAYLOAD - 16 {
             return Err(FrameError::InvalidLength);
         }
 
-        let counter =
-            self.send_counter;
+        let counter = self.send_counter;
 
-        let next_counter =
-            counter
-                .checked_add(1)
-                .ok_or(FrameError::CounterExhausted)?;
+        let next_counter = counter
+            .checked_add(1)
+            .ok_or(FrameError::CounterExhausted)?;
 
-        let nonce =
-            build_nonce(
-                &self.keys.send_nonce_prefix,
-                counter,
-            );
+        let nonce = build_nonce(
+            &self.keys.send_nonce_prefix,
+            counter,
+        );
 
-        let ciphertext_length =
-            plaintext
-                .len()
-                .checked_add(16)
-                .ok_or(FrameError::InvalidLength)?;
+        let cipher = ChaCha20Poly1305::new_from_slice(
+            self.keys.send_key.as_ref(),
+        )
+        .map_err(|_| FrameError::EncryptionFailed)?;
 
-        if ciphertext_length > MAX_LINK_PAYLOAD {
-            return Err(FrameError::InvalidLength);
-        }
-
-        let header =
-            FrameHeader {
-                message_type,
-                priority,
-                flags: flags.insert(
-                    PacketFlags::ENCRYPTED,
-                ),
-                counter,
-                ciphertext_length:
-                    ciphertext_length as u32,
-            };
-
-        let header_bytes =
-            header.encode(
-                &self.keys.session_id,
-            );
-
-        let cipher =
-            ChaCha20Poly1305::new_from_slice(
-                self.keys.send_key.as_ref(),
+        let ciphertext = cipher
+            .encrypt(
+                Nonce::from_slice(&nonce),
+                Payload {
+                    msg: plaintext,
+                    aad: &[],
+                },
             )
             .map_err(|_| FrameError::EncryptionFailed)?;
 
-        let encrypted =
-            cipher
-                .encrypt(
-                    Nonce::from_slice(&nonce),
-                    Payload {
-                        msg: plaintext,
-                        aad: &header_bytes,
-                    },
-                )
-                .map_err(|_| FrameError::EncryptionFailed)?;
+        let header = FrameHeader {
+            message_type,
+            priority,
+            flags: flags.insert(PacketFlags::ENCRYPTED),
+            counter,
+            ciphertext_length: ciphertext.len() as u32,
+        };
 
-        self.send_counter =
-            next_counter;
+        let header_bytes = header.encode();
+
+        let ciphertext = cipher
+            .encrypt(
+                Nonce::from_slice(&nonce),
+                Payload {
+                    msg: plaintext,
+                    aad: &header_bytes,
+                },
+            )
+            .map_err(|_| FrameError::EncryptionFailed)?;
+
+        self.send_counter = next_counter;
 
         let mut output =
-            header_bytes;
+            Vec::with_capacity(
+                LINK_HEADER_LENGTH + ciphertext.len(),
+            );
 
-        output.extend_from_slice(
-            &encrypted,
-        );
+        output.extend_from_slice(&header_bytes);
+        output.extend_from_slice(&ciphertext);
 
         Ok(output)
     }
@@ -184,50 +156,35 @@ impl LinkSession {
     pub fn decrypt(
         &mut self,
         frame: &[u8],
-    ) -> Result<
-        DecryptedFrame,
-        FrameError,
-    > {
-        if frame.len()
-            < LINK_HEADER_LENGTH
-        {
+    ) -> Result<DecryptedFrame, FrameError> {
+        if frame.len() < LINK_HEADER_LENGTH {
             return Err(FrameError::InvalidHeader);
         }
 
-        if frame[..4]
-            != LINK_MAGIC
-        {
+        let header_bytes = &frame[..LINK_HEADER_LENGTH];
+
+        if header_bytes[0..4] != LINK_MAGIC {
             return Err(FrameError::InvalidMagic);
         }
 
-        if frame[4]
-            != LINK_VERSION
-        {
+        if header_bytes[4] != LINK_VERSION {
             return Err(FrameError::InvalidVersion);
         }
 
         let message_type =
-            MessageType::from_u8(
-                frame[5],
-            )
-            .ok_or(
-                FrameError::UnknownMessageType
-            )?;
+            MessageType::from_u8(header_bytes[5])
+                .ok_or(FrameError::UnknownMessageType)?;
 
         let priority =
-            TrafficPriority::from_u8(
-                frame[6],
-            )
-            .ok_or(
-                FrameError::UnknownPriority
-            )?;
+            TrafficPriority::from_u8(header_bytes[6])
+                .ok_or(FrameError::UnknownPriority)?;
 
-        let flags =
-            PacketFlags(
-                u16::from_be_bytes(
-                    [frame[7], frame[8]],
-                ),
-            );
+        let flags = PacketFlags(
+            u16::from_be_bytes([
+                header_bytes[7],
+                header_bytes[8],
+            ]),
+        );
 
         let known_flags =
             PacketFlags::ENCRYPTED.0
@@ -236,97 +193,67 @@ impl LinkSession {
                 | PacketFlags::FRAGMENT.0
                 | PacketFlags::FINAL_FRAGMENT.0;
 
-        if flags.bits()
-            & !known_flags
-            != 0
-        {
+        if flags.bits() & !known_flags != 0 {
             return Err(FrameError::InvalidFlags);
         }
 
-        if !flags.contains(
-            PacketFlags::ENCRYPTED,
-        ) {
+        if !flags.contains(PacketFlags::ENCRYPTED) {
             return Err(FrameError::InvalidFlags);
         }
 
-        let mut counter_bytes =
-            [0u8; 8];
+        let mut counter_bytes = [0u8; COUNTER_LENGTH];
 
         counter_bytes.copy_from_slice(
-            &frame[9..17],
+            &header_bytes[9..17],
         );
 
         let counter =
-            u64::from_be_bytes(
-                counter_bytes,
-            );
-
-        let length_start = 17;
-        let length_end = 21;
-
-        if frame.len()
-            < length_end
-        {
-            return Err(FrameError::InvalidHeader);
-        }
-
-        let mut length_bytes =
-            [0u8; 4];
-
-        length_bytes.copy_from_slice(
-            &frame[length_start..length_end],
-        );
+            u64::from_be_bytes(counter_bytes);
 
         let ciphertext_length =
-            u32::from_be_bytes(
-                length_bytes,
-            ) as usize;
+            u32::from_be_bytes([
+                header_bytes[17],
+                header_bytes[18],
+                header_bytes[19],
+                header_bytes[20],
+            ]) as usize;
 
         if ciphertext_length > MAX_LINK_PAYLOAD {
             return Err(FrameError::InvalidLength);
         }
 
         if frame.len()
-            != LINK_HEADER_LENGTH + 5 + ciphertext_length
+            != LINK_HEADER_LENGTH + ciphertext_length
         {
             return Err(FrameError::InvalidLength);
         }
 
-        if !self
-            .receive_window
-            .accept(counter)
-        {
+        if !self.receive_window.accept(counter) {
             return Err(FrameError::ReplayDetected);
         }
 
-        let header =
-            &frame[..21];
-
         let encrypted =
-            &frame[21..];
+            &frame[LINK_HEADER_LENGTH..];
 
-        let nonce =
-            build_nonce(
-                &self.keys.recv_nonce_prefix,
-                counter,
-            );
+        let nonce = build_nonce(
+            &self.keys.recv_nonce_prefix,
+            counter,
+        );
 
-        let cipher =
-            ChaCha20Poly1305::new_from_slice(
-                self.keys.recv_key.as_ref(),
+        let cipher = ChaCha20Poly1305::new_from_slice(
+            self.keys.recv_key.as_ref(),
+        )
+        .map_err(|_| FrameError::DecryptionFailed)?;
+
+        let plaintext = cipher
+            .decrypt(
+                Nonce::from_slice(&nonce),
+                Payload {
+                    msg: encrypted,
+                    aad: header_bytes,
+                },
             )
             .map_err(|_| FrameError::DecryptionFailed)?;
-
-        let plaintext =
-            cipher
-                .decrypt(
-                    Nonce::from_slice(&nonce),
-                    Payload {
-                        msg: encrypted,
-                        aad: header,
-                    },
-                )
-                .map_err(|_| FrameError::DecryptionFailed)?;
 
         Ok(DecryptedFrame {
             message_type,
@@ -348,19 +275,16 @@ pub struct DecryptedFrame {
 }
 
 fn build_nonce(
-    prefix: &[u8; 4],
+    prefix: &[u8; NONCE_PREFIX_LENGTH],
     counter: u64,
 ) -> [u8; 12] {
-    let mut nonce =
-        [0u8; 12];
+    let mut nonce = [0u8; 12];
 
-    nonce[..4]
+    nonce[..NONCE_PREFIX_LENGTH]
         .copy_from_slice(prefix);
 
-    nonce[4..]
-        .copy_from_slice(
-            &counter.to_be_bytes(),
-        );
+    nonce[NONCE_PREFIX_LENGTH..]
+        .copy_from_slice(&counter.to_be_bytes());
 
     nonce
 }
