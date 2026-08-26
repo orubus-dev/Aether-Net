@@ -1,0 +1,14 @@
+{
+  "name": "aether",
+  "version": "0.1.0",
+  "description": "Aether decentralized carrier network",
+  "private": true,
+  "architecture": {
+    "L0": "Aether Physical",
+    "L1": "Aether Mesh",
+    "L2": "AetherLink",
+    "L3": "Aether Network",
+    "L4": "AetherRoute",
+    "L5": "Aether Services"
+  }
+}
