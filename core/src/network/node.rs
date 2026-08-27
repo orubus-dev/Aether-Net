@@ -11,6 +11,10 @@ pub const NODE_ID_LENGTH: usize = 32;
 pub struct NodeId([u8; NODE_ID_LENGTH]);
 
 impl NodeId {
+    pub const fn from_bytes(bytes: [u8; NODE_ID_LENGTH]) -> Self {
+        Self(bytes)
+    }
+
     pub fn from_device(device: &DeviceState) -> Self {
         let fingerprint = Fingerprint::from_domain(b"aether/node-id/v1", &device.public_key);
 
@@ -61,26 +65,39 @@ pub enum NodeRole {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeDescriptor {
     pub node_id: NodeId,
+
     pub device_id: DeviceId,
+
     pub protocol: ProtocolVersion,
+
     pub capabilities: NodeCapabilities,
+
     pub role: NodeRole,
+
     pub announced_at: u64,
 }
 
 impl NodeDescriptor {
     pub fn from_device(
         device: &DeviceState,
+
         capabilities: NodeCapabilities,
+
         role: NodeRole,
+
         announced_at: u64,
     ) -> Self {
         Self {
             node_id: NodeId::from_device(device),
+
             device_id: device.device_id,
+
             protocol: ProtocolVersion::CURRENT,
+
             capabilities,
+
             role,
+
             announced_at,
         }
     }

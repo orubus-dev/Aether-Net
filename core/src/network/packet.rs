@@ -46,7 +46,7 @@ pub enum PacketError {
     RandomnessUnavailable,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PacketId([u8; PACKET_ID_LENGTH]);
 
 impl PacketId {
@@ -63,7 +63,7 @@ impl PacketId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FlowId([u8; FLOW_ID_LENGTH]);
 
 impl FlowId {

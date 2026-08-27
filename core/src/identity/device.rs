@@ -10,6 +10,10 @@ pub const DEVICE_ID_SIZE: usize = 32;
 pub struct DeviceId([u8; DEVICE_ID_SIZE]);
 
 impl DeviceId {
+    pub const fn from_bytes(bytes: [u8; DEVICE_ID_SIZE]) -> Self {
+        Self(bytes)
+    }
+
     pub fn from_public_key(public_key: &VerifyingKey) -> Self {
         let fingerprint = Fingerprint::from_domain(b"aether/device-id/v1", public_key.as_bytes());
 
