@@ -247,36 +247,9 @@ Phase 6 turns isolated Aether nodes into a self-forming network. It sits between
 
 `NetworkFormationEngine` owns bounded bootstrap peers, live peer records, service records, and resource records. Each record has an explicit validity interval so stale network state cannot persist forever.
 
-### Bootstrap
+### Formation and discovery controls
 
-Bootstrap peers are optional starting points used to move a node from `Isolated` to `Forming`. Bootstrap information is deliberately limited to native node/device identifiers, carrier type, and an opaque endpoint hint; it does not introduce an IP dependency into the discovery model.
-
-### Peer discovery
-
-A peer becomes `Connected` after a valid peer record is observed. Duplicate peer observations update the existing record rather than creating unlimited entries. Peer records expire automatically and the formation engine recomputes its state after cleanup.
-
-### Service discovery
-
-Services are represented as owner-scoped identifiers with a kind, version, and validity interval. Newer versions replace older versions while stale versions are rejected. This is the discovery primitive used later by Aether services, communications, storage, and compute.
-
-### Resource discovery
-
-Resources are represented by stable content/resource identifiers, a provider node, resource kind, version, and validity interval. Providers can be replaced by newer versions without requiring a centralized registry.
-
-### Partition and recovery
-
-A partition is explicit state, not an implicit failure. The engine increments a formation generation during partition/recovery transitions and removes expired peer/service/resource state before attempting to reform. A node with no peers and no bootstrap configuration returns to `Isolated`; a node with bootstrap information returns to `Forming` and can seek peers again.
-
-### Resource controls
-
-The discovery plane is bounded by explicit maxima for:
-
-- bootstrap peers;
-- live peer records;
-- service records;
-- resource records.
-
-Malformed, expired, duplicate, or over-capacity records are rejected explicitly. This prevents remote discovery input from becoming an unbounded memory surface.
+Bootstrap peers are optional starting points. Peer, service, and resource records use bounded storage, explicit TTLs, version monotonicity, and partition generations. This makes the discovery plane resilient while limiting hostile input.
 
 ### Phase 6 integration gate
 
@@ -300,9 +273,73 @@ Still required before Phase 6 is production-complete:
 - cryptographically authenticate discovery records;
 - multi-node partition/heal integration tests.
 
+## Phase 7 - Naming & Resource Resolution
+
+Phase 7 introduces the native naming system above discovery. Aether names resolve directly to Aether resource identifiers rather than requiring a DNS name to become an IP address.
+
+### Name model
+
+A name is normalized into a canonical lowercase representation and then mapped to a fixed-size `NameHash` using domain-separated SHA-256. Names are hierarchical by dot-separated labels, with bounded total and per-label lengths.
+
+```text
+school.aeether
+      |
+      v
+canonical name
+      |
+      v
+NameHash (256-bit)
+      |
+      v
+signed NameRecord
+      |
+      v
+ResourceId (256-bit)
+```
+
+The name itself is not the location of a server. The resolved `ResourceId` identifies the native resource; later storage/provider phases determine where replicas of that resource can be obtained.
+
+### Signed records
+
+A `NameRecord` contains the name hash, resource identifier, owner's Ed25519 public key, monotonic version, issuance/expiry times, and a 64-byte signature. The signature covers all fields that define the binding. A resolver verifies the signature and validity interval before accepting a record.
+
+### Version convergence
+
+Records are replaced only by an equal-or-newer version for the same name hash. Older records cannot overwrite newer state. This gives distributed caches a deterministic convergence rule.
+
+### Local resolver and cache
+
+`NamingEngine` provides a bounded authoritative/cache store for native name records. Resolution canonicalizes the requested name, checks the bounded cache against the current record version and expiry, then verifies the stored record before returning its resource identifier. Expired records and cache entries are removable through bounded garbage collection.
+
+### Security boundary
+
+Name records are cryptographically authenticated before publication or resolution. Naming therefore does not trust a central resolver or an unverified network response. Ownership/delegation policy is intentionally separate from the record primitive and is a later integration concern.
+
+### Phase 7 integration gate
+
+Implemented:
+
+- canonical name validation and normalization;
+- fixed-size name hashing;
+- signed name-to-resource records;
+- Ed25519 signature verification;
+- monotonic version replacement;
+- bounded naming database;
+- bounded resolver cache;
+- TTL/expiry validation and cleanup;
+- native name/resource identifiers;
+- naming conformance tests.
+
+Still required before Phase 7 is production-complete:
+
+- distributed record dissemination across live Aether nodes;
+- delegation and authority hierarchy;
+- secure ownership transfer/revocation protocol;
+- native resolver messages over Aether L3/L4;
+- integration with Phase 6 discovery and Phase 8 distributed storage/provider selection.
+
 ## Later phases
 
-Phase 7 builds distributed naming and resource resolution.
 Phase 8 builds distributed storage/content delivery.
 Phase 9 builds distributed compute/service infrastructure.
 Phase 10 builds Aether Hosting.
