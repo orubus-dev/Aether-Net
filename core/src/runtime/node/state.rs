@@ -1,5 +1,7 @@
+use crate::discovery::FormationState;
 use crate::identity::device::DeviceState;
 use crate::network::NodeId;
+use crate::runtime::discovery::DiscoveryFormation;
 use crate::runtime::peers::{PeerTable, RuntimePeer, RuntimePeerState};
 
 use std::collections::HashMap;
@@ -16,13 +18,10 @@ pub enum NodeRuntimeState {
 
 pub struct NodeState {
     pub lifecycle: NodeRuntimeState,
-
     pub started_at: Instant,
-
     pub peer_table: PeerTable,
-
+    pub formation: DiscoveryFormation,
     device: DeviceState,
-
     runtime_peers: HashMap<NodeId, RuntimePeer>,
 }
 
@@ -30,19 +29,24 @@ impl NodeState {
     pub fn new(now: Instant, device: DeviceState) -> Self {
         Self {
             lifecycle: NodeRuntimeState::Starting,
-
             started_at: now,
-
             peer_table: PeerTable::new(),
-
+            formation: DiscoveryFormation::new(crate::physical::PhysicalTransport::Ethernet),
             device,
-
             runtime_peers: HashMap::new(),
         }
     }
 
     pub fn device(&self) -> &DeviceState {
         &self.device
+    }
+
+    pub fn formation_state(&self) -> FormationState {
+        self.formation.state()
+    }
+
+    pub fn formation_generation(&self) -> u64 {
+        self.formation.generation()
     }
 
     pub fn remember_peer(&mut self, peer: RuntimePeer) {
@@ -58,9 +62,7 @@ impl NodeState {
     pub fn mark_peer_ack(&mut self, node_id: NodeId, address: SocketAddr, now: Instant) {
         if let Some(peer) = self.runtime_peers.get_mut(&node_id) {
             peer.address = address;
-
             peer.seen_ack(now);
-
             return;
         }
 
