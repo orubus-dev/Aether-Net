@@ -1,7 +1,7 @@
 use super::control_protocol::{decode_advertisement, encode_advertisement};
 use super::{
-    ROUTING_ADVERTISEMENT_MAGIC, RouteNeighbor, RoutingControlError, RoutingControlPlane,
-    RoutingPeer, SignedRouteAdvertisement,
+    RouteNeighbor, RoutingControlError, RoutingControlPlane, RoutingPeer, SignedRouteAdvertisement,
+    ROUTING_ADVERTISEMENT_MAGIC,
 };
 use crate::identity::fingerprint::Fingerprint;
 use crate::link::LinkSession;
@@ -158,8 +158,7 @@ impl RoutingRuntime {
     pub fn remove_peer(&mut self, node_id: NodeId) -> bool {
         let removed = self.control.remove_peer(node_id);
         if removed {
-            self.local_neighbors
-                .retain(|neighbor| neighbor.node_id != node_id);
+            self.local_neighbors.retain(|neighbor| neighbor.node_id != node_id);
         }
         removed
     }
@@ -186,9 +185,13 @@ impl RoutingRuntime {
             let flow = route_flow_id(self.local_address(), peer.address);
             self.native
                 .open_flow(peer.address, flow, AetherTransportMode::Datagram)?;
-            let frame =
-                self.native
-                    .send_l4(peer.address, flow, payload.clone(), now_ms, now_seconds)?;
+            let frame = self.native.send_l4(
+                peer.address,
+                flow,
+                payload.clone(),
+                now_ms,
+                now_seconds,
+            )?;
             output.push(RoutingOutboundFrame {
                 destination: peer.node_id,
                 address: peer.address,
@@ -216,7 +219,7 @@ impl RoutingRuntime {
                     route_count,
                     advertisement_sent: true,
                     accepted_advertisements: 0,
-                    forwarded_advertisements: frames.len(),
+                    forwarded_advertisements: 0,
                 },
                 frames,
             ));
@@ -384,12 +387,6 @@ mod tests {
             .unwrap();
         assert_eq!(accepted, 1);
         assert!(flooded.is_empty());
-        assert!(
-            runtime_b
-                .control()
-                .l3()
-                .lookup_route(address(1), 10)
-                .is_some()
-        );
+        assert!(runtime_b.native().l3().lookup_route(address(1), 10).is_some());
     }
 }
