@@ -1,4 +1,3 @@
-pub mod game;
 pub mod hosting;
 pub mod policy;
 pub mod registry;
