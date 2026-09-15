@@ -2,7 +2,8 @@
 resolver = "3"
 
 members = [
-    "core"
+    "core",
+    "aethernet-os/daemon"
 ]
 
 [workspace.package]
