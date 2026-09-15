@@ -1,5 +1,6 @@
 pub mod control_plane;
 pub mod distributed;
+pub mod distributed_fixed;
 pub mod engine;
 pub mod gateway;
 pub mod metric;
@@ -11,7 +12,7 @@ pub use control_plane::{
     ROUTING_PUBLIC_KEY_LENGTH, ROUTING_SIGNATURE_LENGTH, ROUTING_WIRE_VERSION,
 };
 
-pub use distributed::{
+pub use distributed_fixed::{
     DistributedRoutingEngine, RouteAdvertisement, RouteNeighbor, RoutingError,
     DEFAULT_MAX_ADVERTISEMENT_NEIGHBORS, DEFAULT_MAX_LINKS, DEFAULT_MAX_NODES,
     DEFAULT_MAX_PATHS, DEFAULT_MAX_SEARCH_STATES, DEFAULT_ROUTE_TTL_SECONDS,
