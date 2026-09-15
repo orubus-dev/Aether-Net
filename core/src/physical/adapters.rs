@@ -1,7 +1,7 @@
 use super::capabilities::{PhysicalCapabilities, PhysicalTransport};
+use super::engine::UnderlayProperties;
 use super::interface::{PhysicalAdapter, PhysicalAdapterExt, PhysicalError};
 use super::link::{PhysicalLink, PhysicalLinkId};
-use super::engine::UnderlayProperties;
 
 #[derive(Debug, Clone)]
 pub struct ConfiguredAdapter {
@@ -16,34 +16,34 @@ impl ConfiguredAdapter {
         transport: PhysicalTransport,
         capabilities: PhysicalCapabilities,
         properties: UnderlayProperties,
-    ) -> Self {
-        Self {
+    ) -> Result<Self, PhysicalError> {
+        if properties.transport != transport || properties.mtu == 0 || properties.bandwidth_bps == 0 {
+            return Err(PhysicalError::Unsupported);
+        }
+        Ok(Self {
             transport,
             capabilities,
             properties,
             discovered_links: Vec::new(),
-        }
+        })
     }
 
     pub fn with_link(mut self, link: PhysicalLink) -> Result<Self, PhysicalError> {
-        if link.transport != self.transport {
-            return Err(PhysicalError::DiscoveryFailed);
-        }
-        if link.packet_loss_ppm > 1_000_000 || link.signal_quality > 100 {
-            return Err(PhysicalError::DiscoveryFailed);
-        }
-        self.discovered_links.push(link);
+        self.add_link(link)?;
         Ok(self)
     }
 
     pub fn add_link(&mut self, link: PhysicalLink) -> Result<(), PhysicalError> {
-        if link.transport != self.transport {
+        if link.transport != self.transport
+            || link.packet_loss_ppm > 1_000_000
+            || link.signal_quality > 100
+            || link.estimated_bandwidth_bps == 0
+        {
             return Err(PhysicalError::DiscoveryFailed);
         }
-        if link.packet_loss_ppm > 1_000_000 || link.signal_quality > 100 {
-            return Err(PhysicalError::DiscoveryFailed);
-        }
-        if !self.discovered_links.iter().any(|existing| existing.id == link.id) {
+        if let Some(existing) = self.discovered_links.iter_mut().find(|existing| existing.id == link.id) {
+            *existing = link;
+        } else {
             self.discovered_links.push(link);
         }
         Ok(())
@@ -70,66 +70,73 @@ impl PhysicalAdapterExt for ConfiguredAdapter {
     }
 }
 
-macro_rules! carrier_adapter {
-    ($name:ident, $transport:expr, $caps:expr, $mtu:expr, $broadcast:expr, $multicast:expr) => {
-        pub type $name = ConfiguredAdapter;
-
-        #[allow(dead_code)]
-        pub fn $name##_new(properties: UnderlayProperties) -> ConfiguredAdapter {
-            ConfiguredAdapter::new(
-                $transport,
-                $caps,
-                UnderlayProperties {
-                    transport: $transport,
-                    mtu: $mtu,
-                    bandwidth_bps: properties.bandwidth_bps,
-                    latency_us: properties.latency_us,
-                    energy_cost: properties.energy_cost,
-                    supports_broadcast: $broadcast,
-                    supports_multicast: $multicast,
-                },
-            )
-        }
-    };
-}
-
-pub fn ethernet_adapter(properties: UnderlayProperties) -> ConfiguredAdapter {
+pub fn ethernet_adapter(properties: UnderlayProperties) -> Result<ConfiguredAdapter, PhysicalError> {
     ConfiguredAdapter::new(
         PhysicalTransport::Ethernet,
         PhysicalCapabilities { ethernet: true, ..PhysicalCapabilities::empty() },
-        UnderlayProperties { transport: PhysicalTransport::Ethernet, mtu: properties.mtu.min(9000), supports_broadcast: true, supports_multicast: true, ..properties },
+        UnderlayProperties {
+            transport: PhysicalTransport::Ethernet,
+            mtu: properties.mtu.min(9000),
+            supports_broadcast: true,
+            supports_multicast: true,
+            ..properties
+        },
     )
 }
 
-pub fn wifi_adapter(properties: UnderlayProperties) -> ConfiguredAdapter {
+pub fn wifi_adapter(properties: UnderlayProperties) -> Result<ConfiguredAdapter, PhysicalError> {
     ConfiguredAdapter::new(
         PhysicalTransport::Wifi,
         PhysicalCapabilities { wifi: true, ..PhysicalCapabilities::empty() },
-        UnderlayProperties { transport: PhysicalTransport::Wifi, mtu: properties.mtu.min(2304), supports_broadcast: true, supports_multicast: true, ..properties },
+        UnderlayProperties {
+            transport: PhysicalTransport::Wifi,
+            mtu: properties.mtu.min(2304),
+            supports_broadcast: true,
+            supports_multicast: true,
+            ..properties
+        },
     )
 }
 
-pub fn wifi_direct_adapter(properties: UnderlayProperties) -> ConfiguredAdapter {
+pub fn wifi_direct_adapter(properties: UnderlayProperties) -> Result<ConfiguredAdapter, PhysicalError> {
     ConfiguredAdapter::new(
         PhysicalTransport::WifiDirect,
         PhysicalCapabilities { wifi_direct: true, ..PhysicalCapabilities::empty() },
-        UnderlayProperties { transport: PhysicalTransport::WifiDirect, mtu: properties.mtu.min(2304), supports_broadcast: false, supports_multicast: false, ..properties },
+        UnderlayProperties {
+            transport: PhysicalTransport::WifiDirect,
+            mtu: properties.mtu.min(2304),
+            supports_broadcast: false,
+            supports_multicast: false,
+            ..properties
+        },
     )
 }
 
-pub fn bluetooth_le_adapter(properties: UnderlayProperties) -> ConfiguredAdapter {
+pub fn bluetooth_le_adapter(properties: UnderlayProperties) -> Result<ConfiguredAdapter, PhysicalError> {
     ConfiguredAdapter::new(
         PhysicalTransport::BluetoothLe,
         PhysicalCapabilities { bluetooth_le: true, ..PhysicalCapabilities::empty() },
-        UnderlayProperties { transport: PhysicalTransport::BluetoothLe, mtu: properties.mtu.min(512), supports_broadcast: false, supports_multicast: false, ..properties },
+        UnderlayProperties {
+            transport: PhysicalTransport::BluetoothLe,
+            mtu: properties.mtu.min(512),
+            supports_broadcast: false,
+            supports_multicast: false,
+            ..properties
+        },
     )
 }
 
-pub fn direct_link_adapter(properties: UnderlayProperties) -> ConfiguredAdapter {
+pub fn direct_link_adapter(properties: UnderlayProperties) -> Result<ConfiguredAdapter, PhysicalError> {
     ConfiguredAdapter::new(
         PhysicalTransport::Uwb,
         PhysicalCapabilities { uwb: true, ..PhysicalCapabilities::empty() },
-        UnderlayProperties { transport: PhysicalTransport::Uwb, mtu: properties.mtu.min(4096), supports_broadcast: false, supports_multicast: false, ..properties },
+        UnderlayProperties {
+            transport: PhysicalTransport::Uwb,
+            mtu: properties.mtu.min(4096),
+            supports_broadcast: false,
+            supports_multicast: false,
+            ..properties
+        },
     )
 }
 
