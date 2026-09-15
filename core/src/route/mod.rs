@@ -2,6 +2,7 @@ pub mod control_plane_runtime;
 pub mod distributed_fixed;
 pub mod engine;
 pub mod gateway;
+pub mod linux_kernel;
 pub mod metric;
 pub mod path;
 
@@ -21,5 +22,6 @@ pub use distributed_fixed::{
 
 pub use engine::RouteEngine;
 pub use gateway::{GatewayAdvertisement, GatewayCapacity};
+pub use linux_kernel::{KernelInterfaceAnalytics, KernelInterfaceConfig, LinuxKernelError, LinuxKernelInterface};
 pub use metric::RouteMetrics;
 pub use path::RoutePath;
