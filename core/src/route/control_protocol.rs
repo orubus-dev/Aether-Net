@@ -123,11 +123,7 @@ pub fn decode_advertisement(
 
     let message = SignedRouteAdvertisement {
         advertisement: super::RouteAdvertisement::with_expiry(
-            origin,
-            sequence,
-            issued_at,
-            expires_at,
-            neighbors,
+            origin, sequence, issued_at, expires_at, neighbors,
         ),
         public_key,
         signature,
@@ -201,10 +197,8 @@ mod tests {
     }
 
     fn node_id(key: &SigningKey) -> NodeId {
-        let fingerprint = Fingerprint::from_domain(
-            b"aether/node-id/v1",
-            &key.verifying_key().to_bytes(),
-        );
+        let fingerprint =
+            Fingerprint::from_domain(b"aether/node-id/v1", &key.verifying_key().to_bytes());
         NodeId::from_bytes(*fingerprint.as_bytes())
     }
 
