@@ -72,7 +72,11 @@ fn parse_peers() -> Result<Vec<SocketAddr>, Box<dyn std::error::Error>> {
         .split(',')
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .map(|value| value.parse().map_err(|error| Box::new(error) as Box<dyn std::error::Error>))
+        .map(|value| {
+            value
+                .parse()
+                .map_err(|error| Box::new(error) as Box<dyn std::error::Error>)
+        })
         .collect()
 }
 
