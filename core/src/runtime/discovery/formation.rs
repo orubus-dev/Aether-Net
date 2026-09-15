@@ -59,7 +59,12 @@ impl DiscoveryFormation {
         self.engine.bootstrap_peers()
     }
 
-    pub fn add_bootstrap(&mut self, node_id: NodeId, device_id: DeviceId, address: SocketAddr) -> Result<(), DiscoveryError> {
+    pub fn add_bootstrap(
+        &mut self,
+        node_id: NodeId,
+        device_id: DeviceId,
+        address: SocketAddr,
+    ) -> Result<(), DiscoveryError> {
         self.engine.add_bootstrap(BootstrapPeer {
             node_id,
             device_id,
@@ -74,12 +79,10 @@ impl DiscoveryFormation {
         device_id: DeviceId,
         now: u64,
     ) -> Result<bool, DiscoveryError> {
-        self.engine.observe_peer(PeerRecord::new(
-            node_id,
-            device_id,
-            self.transport,
+        self.engine.observe_peer(
+            PeerRecord::new(node_id, device_id, self.transport, now),
             now,
-        ), now)
+        )
     }
 
     pub fn maintain(&mut self, now: u64) -> usize {
@@ -152,7 +155,9 @@ mod tests {
     fn bootstrap_is_registered_and_forms_network() {
         let mut discovery = DiscoveryFormation::new(PhysicalTransport::Ethernet);
         let address = "127.0.0.1:4000".parse().unwrap();
-        discovery.add_bootstrap(node(1), device(1), address).unwrap();
+        discovery
+            .add_bootstrap(node(1), device(1), address)
+            .unwrap();
         assert_eq!(discovery.state(), FormationState::Forming);
         assert_eq!(discovery.bootstrap_peers().len(), 1);
     }
