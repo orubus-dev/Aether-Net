@@ -102,7 +102,12 @@ impl DiscoveryFormation {
         advertisement: &SignedDiscoveryAdvertisement,
         now: u64,
     ) -> Result<bool, DiscoveryError> {
-        self.gossip.accept(&mut self.engine, advertisement, now)
+        let was_partitioned = self.state() == FormationState::Partitioned;
+        let changed = self.gossip.accept(&mut self.engine, advertisement, now)?;
+        if was_partitioned && changed {
+            self.engine.recover_partition(now);
+        }
+        Ok(changed)
     }
 
     pub fn create_advertisement(
@@ -158,12 +163,22 @@ impl DiscoveryFormation {
             return 0;
         }
         self.last_gc = now;
-        self.engine.expire(now)
+        let was_connected = self.state() == FormationState::Connected;
+        let removed = self.engine.expire(now);
+        if was_connected && self.engine.peer_count() == 0 {
+            self.engine.mark_partitioned();
+        }
+        removed
     }
 
     pub fn force_expire(&mut self, now: u64) -> usize {
         self.last_gc = now;
-        self.engine.expire(now)
+        let was_connected = self.state() == FormationState::Connected;
+        let removed = self.engine.expire(now);
+        if was_connected && self.engine.peer_count() == 0 {
+            self.engine.mark_partitioned();
+        }
+        removed
     }
 
     pub fn mark_partitioned(&mut self) {
@@ -271,6 +286,59 @@ mod tests {
             discovery.create_advertisement(node, 101).unwrap().sequence,
             2
         );
+    }
+
+    #[test]
+    fn partition_is_detected_and_recovered_by_valid_gossip() {
+        let local_key = key();
+        let local_device = crate::identity::device::DeviceState::from_signing_key(
+            &local_key,
+            0,
+            Default::default(),
+        );
+        let local_node = NodeId::from_device(&local_device);
+        let remote_key = key();
+        let remote_device = crate::identity::device::DeviceState::from_signing_key(
+            &remote_key,
+            0,
+            Default::default(),
+        );
+        let remote_node = NodeId::from_device(&remote_device);
+
+        let mut discovery = DiscoveryFormation::new(PhysicalTransport::Ethernet, local_key);
+        let initial = SignedDiscoveryAdvertisement::new(
+            &remote_key,
+            remote_node,
+            remote_device.device_id,
+            1,
+            100,
+            220,
+            &[PeerRecord::new(remote_node, remote_device.device_id, PhysicalTransport::Ethernet, 100)],
+            &[],
+            &[],
+        )
+        .unwrap();
+        discovery.accept_advertisement(&initial, 110).unwrap();
+        assert_eq!(discovery.state(), FormationState::Connected);
+        let generation = discovery.generation();
+        discovery.force_expire(300);
+        assert_eq!(discovery.state(), FormationState::Partitioned);
+        assert!(discovery.generation() > generation);
+
+        let recovery = SignedDiscoveryAdvertisement::new(
+            &remote_key,
+            remote_node,
+            remote_device.device_id,
+            2,
+            301,
+            360,
+            &[PeerRecord::new(remote_node, remote_device.device_id, PhysicalTransport::Ethernet, 301)],
+            &[],
+            &[],
+        )
+        .unwrap();
+        assert!(discovery.accept_advertisement(&recovery, 310).unwrap());
+        assert_eq!(discovery.state(), FormationState::Connected);
     }
 
     #[test]
