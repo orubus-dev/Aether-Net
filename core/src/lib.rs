@@ -8,6 +8,7 @@ pub mod identity;
 pub mod link;
 pub mod mesh;
 pub mod naming;
+pub mod name_resolution;
 pub mod network;
 pub mod operative;
 pub mod operative_os;
@@ -39,6 +40,9 @@ pub use gateway::{
 };
 pub use naming::{
     NameError, NameHash, NameRecord, NamingEngine, ResourceId, SignedNameUpdate, canonicalize_name,
+};
+pub use name_resolution::{
+    NameDelegation, NameResolutionEngine, ResolutionError, ResolutionKind,
 };
 pub use operative::{
     AetherOperative, AetherPacketBudget, BandwidthGovernor, BandwidthLimits, DataPacket,
