@@ -1,4 +1,3 @@
-pub mod control;
 pub mod control_plane;
 pub mod distributed;
 pub mod engine;
@@ -6,7 +5,6 @@ pub mod gateway;
 pub mod metric;
 pub mod path;
 
-pub use control::{RouteControl, RouteControlError};
 pub use control_plane::{
     RoutingControlError, RoutingControlPlane, RoutingPeer, SignedRouteAdvertisement,
     DEFAULT_MAX_DYNAMIC_ROUTES, DEFAULT_MAX_NEIGHBORS, DEFAULT_MAX_PEERS,
