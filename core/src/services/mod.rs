@@ -1,3 +1,4 @@
+pub mod game;
 pub mod hosting;
 pub mod policy;
 pub mod registry;
@@ -8,4 +9,4 @@ pub use hosting::{
 };
 
 pub use registry::RuntimeServiceRegistry;
-pub use service::RuntimeService;
+pub use service::{ServiceDescriptor, ServiceId, ServiceKind};
