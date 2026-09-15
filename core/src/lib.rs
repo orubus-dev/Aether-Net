@@ -1,7 +1,9 @@
 pub mod compute;
+pub mod connect;
 pub mod core;
 pub mod discovery;
 pub mod errors;
+pub mod gateway;
 pub mod identity;
 pub mod link;
 pub mod mesh;
@@ -16,9 +18,11 @@ pub mod storage;
 pub mod transport;
 
 pub use compute::{ComputeCapacity, ComputeError, ComputeNode, DistributedCompute, Placement, Workload, WorkloadId, WorkloadSpec};
+pub use connect::{AetherConnect, ConnectError, ConversationId, Group, MediaKind, MessageEnvelope, OfflineMessage, Presence};
 pub use core::{AetherCore, CoreState};
 pub use discovery::{BootstrapPeer, DiscoveryError, DiscoveryKind, FormationState, NetworkFormationEngine, PeerRecord, ResourceRecord, ServiceRecord};
 pub use errors::CoreError;
+pub use gateway::{GatewayDescriptor, GatewayDirection, GatewayDirectory, GatewayError, GatewayProtocol};
 pub use naming::{canonicalize_name, NameError, NameHash, NameRecord, NamingEngine, ResourceId, SignedNameUpdate};
 pub use security::{PrivacyContext, PrivacyToken, ReplayWindow, SecurityPolicy, SecurityProfile};
 pub use storage::{ChunkDigest, ChunkId, ChunkStore, ContentChunk, ContentId, ContentManifest, DistributedStorage, ManifestStore, ProviderAdvertisement, ProviderDirectory, RepairPlan, StorageError, StoredChunk, StoredManifest};
