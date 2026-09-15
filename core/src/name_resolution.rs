@@ -1,5 +1,4 @@
 use crate::naming::{canonicalize_name, NameError, NameHash, NameRecord, NamingEngine, ResourceId};
-use crate::storage::{DistributedStorage, ProviderAdvertisement};
 use crate::network::NodeId;
 
 pub const DEFAULT_MAX_DELEGATIONS: usize = 16_384;
@@ -7,14 +6,12 @@ pub const DEFAULT_MAX_DELEGATIONS: usize = 16_384;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolutionKind {
     Resource,
-    StorageProviders,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResolutionError {
     InvalidName(NameError),
     NameNotFound,
-    StorageUnavailable,
     DelegationCapacity,
 }
 
@@ -35,10 +32,18 @@ pub struct NameResolutionEngine {
 
 impl NameResolutionEngine {
     pub fn new() -> Self {
-        Self::with_limits(DEFAULT_MAX_DELEGATIONS, crate::naming::DEFAULT_MAX_RECORDS, crate::naming::DEFAULT_MAX_CACHE_ENTRIES)
+        Self::with_limits(
+            DEFAULT_MAX_DELEGATIONS,
+            crate::naming::DEFAULT_MAX_RECORDS,
+            crate::naming::DEFAULT_MAX_CACHE_ENTRIES,
+        )
     }
 
-    pub fn with_limits(max_delegations: usize, max_records: usize, max_cache_entries: usize) -> Self {
+    pub fn with_limits(
+        max_delegations: usize,
+        max_records: usize,
+        max_cache_entries: usize,
+    ) -> Self {
         Self {
             naming: NamingEngine::with_limits(max_records, max_cache_entries),
             delegations: Vec::new(),
@@ -59,14 +64,24 @@ impl NameResolutionEngine {
     }
 
     pub fn publish_name(&mut self, record: NameRecord, now: u64) -> Result<bool, ResolutionError> {
-        self.naming.publish(record, now).map_err(ResolutionError::InvalidName)
+        self.naming
+            .publish(record, now)
+            .map_err(ResolutionError::InvalidName)
     }
 
-    pub fn add_delegation(&mut self, delegation: NameDelegation, now: u64) -> Result<bool, ResolutionError> {
+    pub fn add_delegation(
+        &mut self,
+        delegation: NameDelegation,
+        now: u64,
+    ) -> Result<bool, ResolutionError> {
         if now >= delegation.expires_at {
             return Err(ResolutionError::InvalidName(NameError::Expired));
         }
-        if let Some(existing) = self.delegations.iter_mut().find(|d| d.name_hash == delegation.name_hash) {
+        if let Some(existing) = self
+            .delegations
+            .iter_mut()
+            .find(|item| item.name_hash == delegation.name_hash)
+        {
             if delegation.version < existing.version {
                 return Ok(false);
             }
@@ -88,23 +103,9 @@ impl NameResolutionEngine {
         })
     }
 
-    pub fn resolve_providers(
-        &mut self,
-        name: &str,
-        now: u64,
-        storage: &DistributedStorage,
-        max_results: usize,
-    ) -> Result<Vec<ProviderAdvertisement>, ResolutionError> {
-        let resource = self.resolve(name, now)?;
-        let providers = storage
-            .providers_for(resource)
-            .map_err(|_| ResolutionError::StorageUnavailable)?;
-        Ok(providers.take(max_results.max(1)).cloned().collect())
-    }
-
     pub fn expire(&mut self, now: u64) -> usize {
         let before = self.delegations.len();
-        self.delegations.retain(|d| now < d.expires_at);
+        self.delegations.retain(|item| now < item.expires_at);
         let delegation_expired = before.saturating_sub(self.delegations.len());
         delegation_expired + self.naming.expire(now)
     }
@@ -123,15 +124,17 @@ mod tests {
     #[test]
     fn delegation_is_versioned_and_bounded() {
         let mut engine = NameResolutionEngine::with_limits(1, 4, 4);
-        let d = NameDelegation {
+        let delegation = NameDelegation {
             name_hash: NameHash::of("app.aether"),
             parent_hash: NameHash::of("aether"),
             owner: NodeId::from_bytes([1; 32]),
             version: 1,
             expires_at: 100,
         };
-        assert!(engine.add_delegation(d, 10).unwrap());
-        assert!(!engine.add_delegation(NameDelegation { version: 0, ..d }, 10).unwrap());
+        assert!(engine.add_delegation(delegation, 10).unwrap());
+        assert!(!engine
+            .add_delegation(NameDelegation { version: 0, ..delegation }, 10)
+            .unwrap());
         assert_eq!(engine.delegation_count(), 1);
     }
 
@@ -139,13 +142,16 @@ mod tests {
     fn expired_delegations_are_collected() {
         let mut engine = NameResolutionEngine::new();
         engine
-            .add_delegation(NameDelegation {
-                name_hash: NameHash::of("old.aether"),
-                parent_hash: NameHash::of("aether"),
-                owner: NodeId::from_bytes([1; 32]),
-                version: 1,
-                expires_at: 10,
-            }, 1)
+            .add_delegation(
+                NameDelegation {
+                    name_hash: NameHash::of("old.aether"),
+                    parent_hash: NameHash::of("aether"),
+                    owner: NodeId::from_bytes([1; 32]),
+                    version: 1,
+                    expires_at: 10,
+                },
+                1,
+            )
             .unwrap();
         assert_eq!(engine.expire(10), 1);
     }
