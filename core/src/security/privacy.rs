@@ -1,15 +1,10 @@
 use hkdf::Hkdf;
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 use std::fmt;
 
 pub const PRIVACY_TOKEN_LENGTH: usize = 32;
 pub const PRIVACY_EPOCH_SECONDS: u64 = 300;
 
-/// Per-session, rotating privacy material for Aether control/data protocols.
-///
-/// The stable Aether identity must not be serialized into ordinary data-plane
-/// traffic. A protocol can use this context to derive short-lived opaque tokens
-/// and rotate them without changing the underlying identity.
 #[derive(Clone)]
 pub struct PrivacyContext {
     secret: [u8; PRIVACY_TOKEN_LENGTH],
@@ -23,11 +18,11 @@ impl PrivacyContext {
         Ok(Self { secret, epoch })
     }
 
-    pub fn from_secret(secret: [u8; PRIVACY_TOKEN_LENGTH], epoch: u64) -> Self {
+    pub const fn from_secret(secret: [u8; PRIVACY_TOKEN_LENGTH], epoch: u64) -> Self {
         Self { secret, epoch }
     }
 
-    pub fn epoch(&self) -> u64 {
+    pub const fn epoch(&self) -> u64 {
         self.epoch
     }
 
@@ -46,10 +41,6 @@ impl PrivacyContext {
     pub fn token(&self, purpose: &[u8]) -> PrivacyToken {
         PrivacyToken::derive(&self.secret, self.epoch, purpose)
     }
-
-    pub fn token_for_epoch(&self, epoch: u64, purpose: &[u8]) -> PrivacyToken {
-        PrivacyToken::derive(&self.secret, epoch, purpose)
-    }
 }
 
 impl Drop for PrivacyContext {
@@ -63,11 +54,16 @@ pub struct PrivacyToken([u8; PRIVACY_TOKEN_LENGTH]);
 
 impl PrivacyToken {
     pub fn derive(secret: &[u8; PRIVACY_TOKEN_LENGTH], epoch: u64, purpose: &[u8]) -> Self {
+        let mut purpose_hash = Sha256::new();
+        purpose_hash.update(purpose);
+        let purpose_digest = purpose_hash.finalize();
+
         let hkdf = Hkdf::<Sha256>::new(None, secret);
-        let mut info = Vec::with_capacity(24 + purpose.len());
-        info.extend_from_slice(b"aether:privacy:v1:");
-        info.extend_from_slice(&epoch.to_be_bytes());
-        info.extend_from_slice(purpose);
+        let mut info = [0u8; 8 + 8 + 24];
+        let prefix = b"aether:privacy:v1:";
+        info[..prefix.len()].copy_from_slice(prefix);
+        info[18..26].copy_from_slice(&epoch.to_be_bytes());
+        info[26..58].copy_from_slice(&purpose_digest);
 
         let mut output = [0u8; PRIVACY_TOKEN_LENGTH];
         hkdf.expand(&info, &mut output)
@@ -106,12 +102,16 @@ mod tests {
     }
 
     #[test]
-    fn purpose_and_epoch_change_the_token() {
+    fn purpose_changes_the_token() {
         let context = PrivacyContext::from_secret([7u8; PRIVACY_TOKEN_LENGTH], 10);
-        let route = context.token(b"route");
-        let presence = context.token(b"presence");
-        let next_epoch = context.token_for_epoch(11, b"route");
-        assert_ne!(route, presence);
-        assert_ne!(route, next_epoch);
+        assert_ne!(context.token(b"route"), context.token(b"presence"));
+    }
+
+    #[test]
+    fn epoch_changes_the_token() {
+        let context = PrivacyContext::from_secret([7u8; PRIVACY_TOKEN_LENGTH], 10);
+        let first = context.token(b"route");
+        let second = PrivacyToken::derive(&[7u8; PRIVACY_TOKEN_LENGTH], 11, b"route");
+        assert_ne!(first, second);
     }
 }
