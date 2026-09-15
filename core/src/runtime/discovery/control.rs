@@ -81,7 +81,9 @@ impl DiscoveryControl {
             }
             Self::HelloAck(ack) => ack.encode(),
             Self::Advertisement(advertisement) => {
-                let payload = advertisement.encode();
+                let payload = advertisement
+                    .encode()
+                    .expect("validated discovery advertisement exceeds codec bounds");
                 let mut bytes = Vec::with_capacity(6 + payload.len());
                 bytes.extend_from_slice(&MAGIC);
                 bytes.push(VERSION);
