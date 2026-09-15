@@ -83,11 +83,21 @@
 - [ ] Integrate formation output with Phase 4 route convergence.
 - [ ] Multi-node partition/heal integration tests.
 
-## Phase 7 - Naming & Resource Resolution
+## Phase 7 - Naming & Resource Resolution [IMPLEMENTED - DISTRIBUTED INTEGRATION PENDING]
 
-- Aether names/domains.
-- Signed records.
-- Distributed resolution and caching.
+- [x] Canonical Aether name normalization and validation.
+- [x] Fixed-size hashed name identifiers.
+- [x] Signed name-to-resource records using Ed25519 verification.
+- [x] Monotonic record-version convergence.
+- [x] Bounded local naming database.
+- [x] Bounded resolver cache.
+- [x] TTL/expiry validation and cleanup.
+- [x] Case-insensitive canonical resolution.
+- [x] Explicit cache/record capacity errors.
+- [ ] Distributed name-record dissemination across Aether nodes.
+- [ ] Delegation/authority hierarchy and ownership transfer protocol.
+- [ ] Native resolver traffic over Aether L3/L4.
+- [ ] Integration with Phase 6 discovery and Phase 8 resource storage.
 
 ## Phase 8 - Distributed Storage & CDN
 
