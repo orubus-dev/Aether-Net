@@ -1,7 +1,7 @@
 use crate::discovery::{
-    BootstrapPeer, DiscoveryError, DiscoveryGossipState, FormationState, NetworkFormationEngine,
-    PeerRecord, SignedDiscoveryAdvertisement, MAX_ADVERTISEMENT_PEERS, MAX_ADVERTISEMENT_RESOURCES,
-    MAX_ADVERTISEMENT_SERVICES,
+    BootstrapPeer, DiscoveryError, DiscoveryGossipState, FormationState, MAX_ADVERTISEMENT_PEERS,
+    MAX_ADVERTISEMENT_RESOURCES, MAX_ADVERTISEMENT_SERVICES, NetworkFormationEngine, PeerRecord,
+    SignedDiscoveryAdvertisement,
 };
 use crate::identity::device::{DeviceId, DeviceSigningKey};
 use crate::network::NodeId;
@@ -263,8 +263,14 @@ mod tests {
         );
         let node = NodeId::from_device(&device);
         let mut discovery = DiscoveryFormation::new(PhysicalTransport::Ethernet, signing_key);
-        assert_eq!(discovery.create_advertisement(node, 100).unwrap().sequence, 1);
-        assert_eq!(discovery.create_advertisement(node, 101).unwrap().sequence, 2);
+        assert_eq!(
+            discovery.create_advertisement(node, 100).unwrap().sequence,
+            1
+        );
+        assert_eq!(
+            discovery.create_advertisement(node, 101).unwrap().sequence,
+            2
+        );
     }
 
     #[test]
