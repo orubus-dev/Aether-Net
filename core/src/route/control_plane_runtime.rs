@@ -1,3 +1,4 @@
+use crate::identity::fingerprint::Fingerprint;
 use crate::identity::{sign, verify_bytes};
 use crate::network::{AetherAddress, AetherL3Engine, L3Route, NodeId, TrafficPriority};
 use crate::route::{
@@ -72,6 +73,7 @@ impl SignedRouteAdvertisement {
 pub struct RoutingControlPlane {
     local_node: NodeId,
     local_address: AetherAddress,
+    local_public_key: [u8; ROUTING_PUBLIC_KEY_LENGTH],
     max_neighbors: usize,
     max_dynamic_routes: usize,
     max_peers: usize,
@@ -103,6 +105,7 @@ impl RoutingControlPlane {
         Self {
             local_node,
             local_address,
+            local_public_key: [0; ROUTING_PUBLIC_KEY_LENGTH],
             max_neighbors: max_neighbors.max(1),
             max_dynamic_routes: max_dynamic_routes.max(1),
             max_peers: max_peers.max(1),
@@ -146,6 +149,19 @@ impl RoutingControlPlane {
         self.peers.values().copied()
     }
 
+    pub fn bind_local_signing_key(
+        &mut self,
+        signing_key: &SigningKey,
+    ) -> Result<(), RoutingControlError> {
+        let public_key = signing_key.verifying_key().to_bytes();
+        let fingerprint = Fingerprint::from_domain(b"aether/node-id/v1", &public_key);
+        if self.local_node != NodeId::from_bytes(*fingerprint.as_bytes()) {
+            return Err(RoutingControlError::InvalidPublicKey);
+        }
+        self.local_public_key = public_key;
+        Ok(())
+    }
+
     pub fn register_peer(&mut self, peer: RoutingPeer) -> Result<(), RoutingControlError> {
         if peer.node_id == self.local_node
             || peer.address == self.local_address
@@ -163,15 +179,15 @@ impl RoutingControlPlane {
     }
 
     pub fn remove_peer(&mut self, node_id: NodeId) -> bool {
-        let removed = self.peers.remove(&node_id).is_some();
-        if removed {
+        let removed = self.peers.remove(&node_id);
+        if let Some(peer) = removed {
             self.distributed.remove_origin(node_id);
-            if let Some(peer) = self.peers.get(&node_id).copied() {
-                self.l3.remove_route(peer.address);
-            }
+            self.l3.remove_route(peer.address);
             self.recompute_dynamic_destinations();
+            true
+        } else {
+            false
         }
-        removed
     }
 
     pub fn local_advertisement(
@@ -191,15 +207,19 @@ impl RoutingControlPlane {
                 || neighbor.metrics.reliability_ppm > 1_000_000
                 || neighbor.metrics.hop_count == 0
         }) {
-            return Err(RoutingControlError::PeerUnknown);
+            return Err(RoutingControlError::InvalidAdvertisement);
         }
-        if signing_key.verifying_key().to_bytes() != self.local_public_key_hint() {
-            return Err(RoutingControlError::InvalidPublicKey);
-        }
+        self.bind_local_signing_key(signing_key)?;
         let sequence = self.next_sequence;
         self.next_sequence = self.next_sequence.saturating_add(1);
         Ok(SignedRouteAdvertisement::sign(
-            RouteAdvertisement::new(self.local_node, sequence, now, neighbors),
+            RouteAdvertisement::with_expiry(
+                self.local_node,
+                sequence,
+                now,
+                now.saturating_add(DEFAULT_ROUTE_TTL_SECONDS),
+                neighbors,
+            ),
             signing_key,
         ))
     }
@@ -220,6 +240,20 @@ impl RoutingControlPlane {
             || !signed.advertisement.is_valid_at(now)
             || signed.advertisement.expires_at <= signed.advertisement.issued_at
             || signed.advertisement.neighbors.len() > self.max_neighbors
+        {
+            return Err(RoutingControlError::InvalidAdvertisement);
+        }
+        if signed
+            .advertisement
+            .neighbors
+            .iter()
+            .any(|neighbor| {
+                neighbor.node_id == signed.advertisement.origin
+                    || neighbor.metrics.bandwidth_bps == 0
+                    || neighbor.metrics.packet_loss_ppm > 1_000_000
+                    || neighbor.metrics.reliability_ppm > 1_000_000
+                    || neighbor.metrics.hop_count == 0
+            })
         {
             return Err(RoutingControlError::InvalidAdvertisement);
         }
@@ -312,10 +346,6 @@ impl RoutingControlPlane {
         for destination in self.dynamic_destinations.drain(..) {
             self.l3.remove_route(destination);
         }
-    }
-
-    fn local_public_key_hint(&self) -> [u8; ROUTING_PUBLIC_KEY_LENGTH] {
-        [0u8; ROUTING_PUBLIC_KEY_LENGTH]
     }
 }
 
@@ -437,6 +467,27 @@ mod tests {
         assert_eq!(
             plane.register_peer(peer(3, &k3)).unwrap_err(),
             RoutingControlError::PeerTableFull
+        );
+    }
+
+    #[test]
+    fn local_advertisement_requires_matching_signing_identity() {
+        let mut plane = RoutingControlPlane::with_limits(node(1), address(1), 8, 8, 8);
+        let peer_key = key(2);
+        plane.register_peer(peer(2, &peer_key)).unwrap();
+        let metrics = metrics(10);
+        assert_eq!(
+            plane
+                .local_advertisement(
+                    0,
+                    vec![RouteNeighbor {
+                        node_id: node(2),
+                        metrics,
+                    }],
+                    &key(9),
+                )
+                .unwrap_err(),
+            RoutingControlError::InvalidPublicKey
         );
     }
 
