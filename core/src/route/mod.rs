@@ -1,10 +1,11 @@
 pub mod control_plane_runtime;
-pub mod distributed;
 pub mod distributed_fixed;
 pub mod engine;
 pub mod gateway;
 pub mod metric;
 pub mod path;
+
+pub use distributed_fixed as distributed;
 
 pub use control_plane_runtime::{
     RoutingControlError, RoutingControlPlane, RoutingPeer, SignedRouteAdvertisement,
