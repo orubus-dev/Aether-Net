@@ -1,3 +1,4 @@
+use crate::security::SecurityProfile;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -10,6 +11,7 @@ pub struct CoreConfig {
     pub emergency_mode: bool,
     pub session_idle_timeout_seconds: u64,
     pub session_max_age_seconds: u64,
+    pub security_profile: SecurityProfile,
 }
 
 impl Default for CoreConfig {
@@ -23,6 +25,7 @@ impl Default for CoreConfig {
             emergency_mode: false,
             session_idle_timeout_seconds: 300,
             session_max_age_seconds: 3600,
+            security_profile: SecurityProfile::Standard,
         }
     }
 }
