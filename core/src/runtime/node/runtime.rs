@@ -63,58 +63,72 @@ impl AetherNodeRuntime {
         self.state.formation.peer_count()
     }
 
-    pub async fn run(mut self, advertised_peers: Vec<SocketAddr>) -> Result<(), NodeRuntimeError> {
+    pub async fn run(self, advertised_peers: Vec<SocketAddr>) -> Result<(), NodeRuntimeError> {
+        let (_shutdown_tx, shutdown_rx) = mpsc::channel(1);
+        self.run_with_shutdown(advertised_peers, shutdown_rx).await
+    }
+
+    /// Runs until the supplied shutdown receiver is triggered, allowing system
+    /// service managers to stop the node without terminating the process.
+    pub async fn run_with_shutdown(
+        mut self,
+        advertised_peers: Vec<SocketAddr>,
+        mut shutdown: mpsc::Receiver<()>,
+    ) -> Result<(), NodeRuntimeError> {
         self.core.start().map_err(NodeRuntimeError::Core)?;
 
         let transport = self.transport.take().ok_or(NodeRuntimeError::Stopped)?;
         let (events_tx, mut events_rx) = mpsc::channel(128);
-        let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
+        let (loop_shutdown_tx, loop_shutdown_rx) = mpsc::channel(1);
 
         let event_loop = NodeEventLoop::new(
             transport,
             self.state,
             events_tx,
-            shutdown_rx,
+            loop_shutdown_rx,
             advertised_peers,
         );
 
         let loop_task = tokio::spawn(event_loop.run());
 
-        while let Some(event) = events_rx.recv().await {
-            match event {
-                NodeEvent::Started => {
-                    println!("Aether node event: started");
+        loop {
+            tokio::select! {
+                event = events_rx.recv() => {
+                    match event {
+                        Some(NodeEvent::Started) => {
+                            println!("Aether node event: started");
+                        }
+                        Some(NodeEvent::ReceivedHello { hello, address }) => {
+                            println!("Aether HELLO received from {}", address);
+                            let _ = hello;
+                        }
+                        Some(NodeEvent::PeerDiscovered { node_id, address }) => {
+                            println!("Aether peer discovered: {} at {}", node_id, address);
+                        }
+                        Some(NodeEvent::PeerExpired { node_id }) => {
+                            println!("Aether peer expired: {}", node_id);
+                        }
+                        Some(NodeEvent::FormationChanged { state, generation }) => {
+                            println!(
+                                "Aether network formation changed: {:?} (generation {})",
+                                state, generation
+                            );
+                        }
+                        Some(NodeEvent::Tick) => {}
+                        Some(NodeEvent::Shutdown) | None => break,
+                    }
                 }
-                NodeEvent::ReceivedHello { hello, address } => {
-                    println!("Aether HELLO received from {}", address);
-                    let _ = hello;
-                }
-                NodeEvent::PeerDiscovered { node_id, address } => {
-                    println!("Aether peer discovered: {} at {}", node_id, address);
-                }
-                NodeEvent::PeerExpired { node_id } => {
-                    println!("Aether peer expired: {}", node_id);
-                }
-                NodeEvent::FormationChanged { state, generation } => {
-                    println!(
-                        "Aether network formation changed: {:?} (generation {})",
-                        state, generation
-                    );
-                }
-                NodeEvent::Tick => {}
-                NodeEvent::Shutdown => {
-                    break;
-                }
+                _ = shutdown.recv() => break,
             }
         }
 
-        let _ = shutdown_tx.send(()).await;
-        loop_task
+        let _ = loop_shutdown_tx.send(()).await;
+        let result = loop_task
             .await
             .map_err(|_| NodeRuntimeError::Runtime)?
-            .map_err(NodeRuntimeError::Loop)?;
+            .map_err(NodeRuntimeError::Loop);
         self.core.stop().map_err(NodeRuntimeError::Core)?;
-        Ok(())
+        result
     }
 }
 
