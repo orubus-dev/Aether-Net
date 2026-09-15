@@ -18,9 +18,14 @@
 - [x] Reliable ACKs are emitted back through native L3 routing and authenticated link encryption.
 - [x] End-to-end L4 multi-node conformance test.
 
-## Phase 4 - Distributed Routing Engine [IMPLEMENTED - INTEGRATION PENDING]
+## Phase 4 - Distributed Routing Engine [CONTROL PLANE IMPLEMENTED - LIVE RUNTIME DISSEMINATION PENDING]
 - [x] Bounded topology, monotonic advertisements, metrics, shortest paths, multipath and loop avoidance.
-- [ ] Signed advertisements, live dissemination, automatic L3 route-table synchronization and failure repair.
+- [x] Correct quality-score ordering: higher route score is preferred.
+- [x] Signed route advertisements with Ed25519 verification.
+- [x] Authenticated peer-to-key binding for route advertisements.
+- [x] Dynamic native L3 route-table synchronization and bounded route expiry/recomputation.
+- [x] Multi-hop route selection and expiry-driven repair conformance tests.
+- [ ] Carry signed routing advertisements through the live native L4/runtime dissemination path.
 
 ## Phase 5 - Physical Underlay Engine [IMPLEMENTED - PLATFORM INTEGRATION PENDING]
 - [x] Carrier-neutral adapter model, capabilities, bounded registries, discovery, selection and MTU validation.
