@@ -473,16 +473,18 @@ mod tests {
         let mut plane = RoutingControlPlane::with_limits(local, address(1), 8, 8, 8);
         let peer_key = key(2);
         plane.register_peer(peer(2, &peer_key)).unwrap();
-        assert!(plane
-            .local_advertisement(
-                0,
-                vec![RouteNeighbor {
-                    node_id: node_for_key(&peer_key),
-                    metrics: metrics(10),
-                }],
-                &local_key,
-            )
-            .is_ok());
+        assert!(
+            plane
+                .local_advertisement(
+                    0,
+                    vec![RouteNeighbor {
+                        node_id: node_for_key(&peer_key),
+                        metrics: metrics(10),
+                    }],
+                    &local_key,
+                )
+                .is_ok()
+        );
         assert_eq!(
             plane
                 .local_advertisement(
