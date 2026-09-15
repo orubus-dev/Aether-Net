@@ -48,10 +48,24 @@
 - [ ] Runtime dissemination and convergence across live Aether nodes.
 - [ ] Failure-repair integration with the Phase 2 forwarding engine.
 
-## Phase 5 - Physical Underlay Engine
+## Phase 5 - Physical Underlay Engine [IMPLEMENTED - PLATFORM INTEGRATION PENDING]
 
-- Wi-Fi, Ethernet, Bluetooth, direct links and future radio adapters.
-- Underlay abstraction and capability negotiation.
+- [x] Transport-independent physical adapter contract.
+- [x] Explicit underlay properties including MTU, bandwidth, latency, energy, broadcast and multicast capabilities.
+- [x] Bounded physical adapter registry.
+- [x] Bounded physical-link registry and validation.
+- [x] Discovery and per-transport refresh.
+- [x] Deterministic active-link selection.
+- [x] MTU-aware frame validation before transmission.
+- [x] Aggregated device physical-capability reporting.
+- [x] Ethernet adapter descriptor.
+- [x] Wi-Fi adapter descriptor.
+- [x] Wi-Fi Direct adapter descriptor.
+- [x] Bluetooth LE adapter descriptor.
+- [x] UWB direct-link adapter descriptor.
+- [ ] OS-specific hardware drivers for each supported carrier.
+- [ ] Live L1/L2 transmission integration with native Aether links.
+- [ ] Hardware interoperability and multi-underlay integration tests.
 
 ## Phase 6 - Network Formation & Discovery
 
