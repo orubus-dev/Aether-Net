@@ -17,9 +17,13 @@ impl AetherFlowId {
         Ok(Self(bytes))
     }
 
-    pub const fn from_bytes(bytes: [u8; FLOW_ID_LENGTH]) -> Self { Self(bytes) }
+    pub const fn from_bytes(bytes: [u8; FLOW_ID_LENGTH]) -> Self {
+        Self(bytes)
+    }
 
-    pub const fn as_bytes(&self) -> &[u8; FLOW_ID_LENGTH] { &self.0 }
+    pub const fn as_bytes(&self) -> &[u8; FLOW_ID_LENGTH] {
+        &self.0
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,7 +36,9 @@ impl L3Flags {
     pub const FRAGMENT: Self = Self(1 << 2);
     pub const FINAL_FRAGMENT: Self = Self(1 << 3);
 
-    pub const fn contains(self, other: Self) -> bool { self.0 & other.0 == other.0 }
+    pub const fn contains(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,8 +73,12 @@ impl AetherL3Packet {
         hop_limit: u8,
         payload: Vec<u8>,
     ) -> Result<Self, L3Error> {
-        if payload.len() > MAX_L3_PAYLOAD { return Err(L3Error::PayloadTooLarge); }
-        if hop_limit == 0 { return Err(L3Error::InvalidHopLimit); }
+        if payload.len() > MAX_L3_PAYLOAD {
+            return Err(L3Error::PayloadTooLarge);
+        }
+        if hop_limit == 0 {
+            return Err(L3Error::InvalidHopLimit);
+        }
         Ok(Self {
             source,
             destination,
@@ -82,7 +92,9 @@ impl AetherL3Packet {
     }
 
     pub fn forward(&mut self) -> Result<(), L3Error> {
-        if self.hop_limit <= 1 { return Err(L3Error::InvalidHopLimit); }
+        if self.hop_limit <= 1 {
+            return Err(L3Error::InvalidHopLimit);
+        }
         self.hop_limit -= 1;
         Ok(())
     }
