@@ -43,19 +43,30 @@ impl DiscoveryGossipState {
 
         if let Some((_, known_sequence)) = self
             .seen
-            .iter_mut()
+            .iter()
             .find(|(origin, _)| *origin == advertisement.origin)
         {
             if advertisement.sequence <= *known_sequence {
                 return Ok(false);
             }
-            *known_sequence = advertisement.sequence;
-        } else {
-            if self.seen.len() >= self.max_origins {
-                return Err(DiscoveryError::CapacityExceeded);
+        } else if self.seen.len() >= self.max_origins {
+            return Err(DiscoveryError::CapacityExceeded);
+        }
+
+        for peer in advertisement.peer_records() {
+            if peer.node_id == NodeId::from_bytes([0; 32]) || !peer.is_valid_at(now) {
+                return Err(DiscoveryError::InvalidAdvertisement);
             }
-            self.seen
-                .push((advertisement.origin, advertisement.sequence));
+        }
+        for service in advertisement.service_records() {
+            if !service.is_valid_at(now) {
+                return Err(DiscoveryError::InvalidAdvertisement);
+            }
+        }
+        for resource in advertisement.resource_records() {
+            if !resource.is_valid_at(now) {
+                return Err(DiscoveryError::InvalidAdvertisement);
+            }
         }
 
         let mut changed = false;
@@ -67,6 +78,17 @@ impl DiscoveryGossipState {
         }
         for resource in advertisement.resource_records() {
             changed |= engine.publish_resource(resource.clone(), now)?;
+        }
+
+        if let Some((_, known_sequence)) = self
+            .seen
+            .iter_mut()
+            .find(|(origin, _)| *origin == advertisement.origin)
+        {
+            *known_sequence = advertisement.sequence;
+        } else {
+            self.seen
+                .push((advertisement.origin, advertisement.sequence));
         }
         Ok(changed)
     }
@@ -83,7 +105,6 @@ mod tests {
     use super::*;
     use crate::discovery::gossip::SignedDiscoveryAdvertisement;
     use crate::identity::device::{DeviceId, DeviceSigningKey};
-    use crate::network::NodeId;
     use crate::physical::PhysicalTransport;
 
     fn identity(key: &DeviceSigningKey) -> (NodeId, DeviceId) {
@@ -97,15 +118,17 @@ mod tests {
         (node, device)
     }
 
-    #[test]
-    fn sequence_is_monotonic_per_origin() {
-        let key = DeviceSigningKey::generate().unwrap();
-        let (node, device) = identity(&key);
-        let ad = SignedDiscoveryAdvertisement::new(
-            &key,
+    fn advertisement(
+        key: &DeviceSigningKey,
+        node: NodeId,
+        device: DeviceId,
+        sequence: u64,
+    ) -> SignedDiscoveryAdvertisement {
+        SignedDiscoveryAdvertisement::new(
+            key,
             node,
             device,
-            2,
+            sequence,
             100,
             180,
             &[PeerRecord::new(
@@ -117,16 +140,35 @@ mod tests {
             &[],
             &[],
         )
-        .unwrap();
-        let old = SignedDiscoveryAdvertisement {
-            sequence: 1,
-            ..ad.clone()
-        };
+        .unwrap()
+    }
+
+    #[test]
+    fn sequence_is_monotonic_per_origin() {
+        let key = DeviceSigningKey::generate().unwrap();
+        let (node, device) = identity(&key);
+        let old = advertisement(&key, node, device, 1);
+        let new = advertisement(&key, node, device, 2);
         let mut state = DiscoveryGossipState::new();
         let mut engine = NetworkFormationEngine::new();
         assert!(state.accept(&mut engine, &old, 110).unwrap());
-        assert!(state.accept(&mut engine, &ad, 110).unwrap());
-        assert!(!state.accept(&mut engine, &ad, 110).unwrap());
+        assert!(state.accept(&mut engine, &new, 110).unwrap());
+        assert!(!state.accept(&mut engine, &new, 110).unwrap());
         assert_eq!(state.sequence(node), Some(2));
+    }
+
+    #[test]
+    fn invalid_member_does_not_advance_sequence() {
+        let key = DeviceSigningKey::generate().unwrap();
+        let (node, device) = identity(&key);
+        let mut invalid = advertisement(&key, node, device, 1);
+        invalid.peers[0].expires_at = 101;
+        let mut state = DiscoveryGossipState::new();
+        let mut engine = NetworkFormationEngine::new();
+        assert_eq!(
+            state.accept(&mut engine, &invalid, 110),
+            Err(DiscoveryError::InvalidAdvertisement)
+        );
+        assert_eq!(state.sequence(node), None);
     }
 }
