@@ -1,4 +1,5 @@
 use crate::core::AetherCore;
+use crate::discovery::FormationState;
 use crate::errors::CoreError;
 use crate::runtime::CoreConfig;
 use crate::runtime::node::{NodeEvent, NodeEventLoop, NodeState};
@@ -8,11 +9,10 @@ use std::net::SocketAddr;
 use std::time::Instant;
 
 use tokio::sync::mpsc;
+
 pub struct AetherNodeRuntime {
     core: AetherCore,
-
     transport: Option<UdpTransport>,
-
     state: NodeState,
 }
 
@@ -23,7 +23,6 @@ impl AetherNodeRuntime {
             .map_err(NodeRuntimeError::Transport)?;
 
         let mut core = AetherCore::new(config);
-
         core.initialize().map_err(NodeRuntimeError::Core)?;
 
         let device = core
@@ -52,13 +51,23 @@ impl AetherNodeRuntime {
         &self.core
     }
 
+    pub fn formation_state(&self) -> FormationState {
+        self.state.formation_state()
+    }
+
+    pub fn formation_generation(&self) -> u64 {
+        self.state.formation_generation()
+    }
+
+    pub fn discovered_peer_count(&self) -> usize {
+        self.state.formation.peer_count()
+    }
+
     pub async fn run(mut self, advertised_peers: Vec<SocketAddr>) -> Result<(), NodeRuntimeError> {
         self.core.start().map_err(NodeRuntimeError::Core)?;
 
         let transport = self.transport.take().ok_or(NodeRuntimeError::Stopped)?;
-
         let (events_tx, mut events_rx) = mpsc::channel(128);
-
         let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
 
         let event_loop = NodeEventLoop::new(
@@ -76,23 +85,23 @@ impl AetherNodeRuntime {
                 NodeEvent::Started => {
                     println!("Aether node event: started");
                 }
-
                 NodeEvent::ReceivedHello { hello, address } => {
                     println!("Aether HELLO received from {}", address);
-
                     let _ = hello;
                 }
-
                 NodeEvent::PeerDiscovered { node_id, address } => {
                     println!("Aether peer discovered: {} at {}", node_id, address);
                 }
-
                 NodeEvent::PeerExpired { node_id } => {
                     println!("Aether peer expired: {}", node_id);
                 }
-
+                NodeEvent::FormationChanged { state, generation } => {
+                    println!(
+                        "Aether network formation changed: {:?} (generation {})",
+                        state, generation
+                    );
+                }
                 NodeEvent::Tick => {}
-
                 NodeEvent::Shutdown => {
                     break;
                 }
@@ -100,14 +109,11 @@ impl AetherNodeRuntime {
         }
 
         let _ = shutdown_tx.send(()).await;
-
         loop_task
             .await
             .map_err(|_| NodeRuntimeError::Runtime)?
             .map_err(NodeRuntimeError::Loop)?;
-
         self.core.stop().map_err(NodeRuntimeError::Core)?;
-
         Ok(())
     }
 }
@@ -126,15 +132,10 @@ impl std::fmt::Display for NodeRuntimeError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Core(error) => write!(formatter, "Aether core error: {error}"),
-
             Self::Transport(error) => write!(formatter, "Aether transport error: {error}"),
-
             Self::IdentityUnavailable => formatter.write_str("Aether node identity unavailable"),
-
             Self::Stopped => formatter.write_str("Aether node is stopped"),
-
             Self::Runtime => formatter.write_str("Aether runtime task failed"),
-
             Self::Loop(error) => write!(formatter, "Aether node event loop error: {error}"),
         }
     }
@@ -146,15 +147,11 @@ impl std::fmt::Display for crate::transport::UdpTransportError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Bind(error) => write!(formatter, "UDP bind failed: {error}"),
-
             Self::LocalAddress(error) => {
                 write!(formatter, "could not read local UDP address: {error}")
             }
-
             Self::Send(error) => write!(formatter, "UDP send failed: {error}"),
-
             Self::Receive(error) => write!(formatter, "UDP receive failed: {error}"),
-
             Self::DatagramTooLarge => formatter.write_str("UDP datagram exceeds maximum size"),
         }
     }
