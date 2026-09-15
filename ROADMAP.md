@@ -21,12 +21,20 @@
 - [x] Reassembly memory and timeout bounds.
 - [ ] Real multi-node forwarding integrated into the authenticated runtime data path.
 
-## Phase 3 - Native L4 Transport Engine
+## Phase 3 - Native L4 Transport Engine [IMPLEMENTED - INTEGRATION PENDING]
 
-- Reliable streams and datagrams.
-- Congestion/flow control.
-- Realtime transport.
-- Multiplexed sessions.
+- [x] Native L4 wire envelope with flow, sequence, cumulative acknowledgement, and receive-window fields.
+- [x] Datagram transport mode.
+- [x] Ordered stream transport mode.
+- [x] Reliable stream mode with bounded in-flight state.
+- [x] Cumulative acknowledgements.
+- [x] Bounded receive buffering and advertised receive window.
+- [x] Retransmission timers with bounded RTO.
+- [x] AIMD congestion-window growth and loss response.
+- [x] Realtime transport that drops stale packets instead of retransmitting them.
+- [x] FIN/RESET lifecycle controls and flow validation.
+- [ ] Native L4 session multiplexing integrated into the live runtime data path.
+- [ ] Multi-node transport integration and interoperability tests.
 
 ## Phase 4 - Distributed Routing Engine
 
