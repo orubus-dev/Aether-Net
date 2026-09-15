@@ -67,10 +67,21 @@
 - [ ] Live L1/L2 transmission integration with native Aether links.
 - [ ] Hardware interoperability and multi-underlay integration tests.
 
-## Phase 6 - Network Formation & Discovery
+## Phase 6 - Network Formation & Discovery [IMPLEMENTED - RUNTIME INTEGRATION PENDING]
 
-- Distributed peer/service/resource discovery.
-- Bootstrap and partition recovery.
+- [x] Bounded bootstrap-peer configuration.
+- [x] Network formation state machine: isolated, forming, connected, partitioned.
+- [x] Bounded peer discovery state.
+- [x] Peer record expiry and cleanup.
+- [x] Service discovery records with monotonic version replacement.
+- [x] Resource discovery records with monotonic version replacement.
+- [x] Partition generation tracking and recovery transitions.
+- [x] Explicit peer/service/resource memory limits.
+- [x] Discovery conformance tests.
+- [ ] Disseminate discovery records through live authenticated Aether peers.
+- [ ] Integrate physical discovery with the formation engine.
+- [ ] Integrate formation output with Phase 4 route convergence.
+- [ ] Multi-node partition/heal integration tests.
 
 ## Phase 7 - Naming & Resource Resolution
 
