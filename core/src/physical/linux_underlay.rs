@@ -173,11 +173,15 @@ fn read_analytics(root: &Path) -> Result<LinuxInterfaceAnalytics, PhysicalError>
 }
 
 fn read_u64(path: impl AsRef<Path>) -> Result<u64, PhysicalError> {
-    read_string(path)?.trim().parse().map_err(|_| PhysicalError::DiscoveryFailed)
+    read_string(path)?
+        .trim()
+        .parse()
+        .map_err(|_| PhysicalError::DiscoveryFailed)
 }
 
 fn read_u32(path: impl AsRef<Path>) -> Result<u32, PhysicalError> {
-    read_u64(path).and_then(|value| u32::try_from(value).map_err(|_| PhysicalError::DiscoveryFailed))
+    read_u64(path)
+        .and_then(|value| u32::try_from(value).map_err(|_| PhysicalError::DiscoveryFailed))
 }
 
 fn read_string(path: impl AsRef<Path>) -> Result<String, PhysicalError> {
