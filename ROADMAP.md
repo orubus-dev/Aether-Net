@@ -48,8 +48,19 @@
 - [x] Bounded gateway directory, protocol/direction modelling, TTL expiry and deterministic lowest-cost selection.
 - [ ] Live protocol translation, gateway authorization, egress filtering, accounting, abuse controls and privacy policy enforcement.
 
-## Phase 13 - AetherNet OS & Operatives
-- Lightweight infrastructure OS, L0-L5 capability operation, provisioning, updates, recovery and monitoring.
+## Phase 13 - AetherNet OS & Operatives [IMPLEMENTED - PLATFORM INTEGRATION PENDING]
+- [x] Explicit L0-L5 capability hierarchy.
+- [x] Operative identity and resource profile.
+- [x] Separate upload/download bandwidth ceilings.
+- [x] Packetized content-transfer scheduling with per-transfer bounds.
+- [x] Native transfer identifiers and packet budget validation.
+- [x] Boot, degraded, recovery and health lifecycle primitives.
+- [x] Uptime and active-transfer status tracking.
+- [ ] Hardware/driver integration for physical carriers.
+- [ ] Persistent provisioning/configuration and signed OS updates.
+- [ ] Sandboxed service/compute supervision.
+- [ ] Disk-backed content store and durable queues.
+- [ ] Live monitoring/telemetry and remote management.
 
 ## Phase 14 - Global Hardening
 - Adversarial testing, large-scale routing/discovery validation, abuse resistance, protocol upgrade and production certification.
