@@ -1,4 +1,4 @@
-use super::{SignedRouteAdvertisement, RoutingControlError};
+use super::{RoutingControlError, SignedRouteAdvertisement};
 
 pub const ROUTE_CONTROL_MAGIC: [u8; 4] = *b"ARTE";
 pub const ROUTE_CONTROL_VERSION: u8 = 1;
@@ -122,11 +122,7 @@ pub fn decode_advertisement(
 
     let message = SignedRouteAdvertisement {
         advertisement: super::RouteAdvertisement::with_expiry(
-            origin,
-            sequence,
-            issued_at,
-            expires_at,
-            neighbors,
+            origin, sequence, issued_at, expires_at, neighbors,
         ),
         public_key,
         signature,

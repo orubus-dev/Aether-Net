@@ -17,9 +17,9 @@ pub use control_plane_runtime::{
 };
 
 pub use control_protocol::{
-    decode_advertisement, encode_advertisement, RouteControlCodecError, ROUTE_CONTROL_ADVERTISEMENT,
-    ROUTE_CONTROL_HEADER_LENGTH, ROUTE_CONTROL_MAGIC, ROUTE_CONTROL_MAX_NEIGHBORS,
-    ROUTE_CONTROL_MAX_SIZE, ROUTE_CONTROL_VERSION,
+    ROUTE_CONTROL_ADVERTISEMENT, ROUTE_CONTROL_HEADER_LENGTH, ROUTE_CONTROL_MAGIC,
+    ROUTE_CONTROL_MAX_NEIGHBORS, ROUTE_CONTROL_MAX_SIZE, ROUTE_CONTROL_VERSION,
+    RouteControlCodecError, decode_advertisement, encode_advertisement,
 };
 
 pub use distributed_fixed::{
@@ -36,6 +36,6 @@ pub use linux_kernel::{
 pub use metric::RouteMetrics;
 pub use path::RoutePath;
 pub use runtime::{
-    node_id_from_signing_key, RoutingOutboundFrame, RoutingRuntime, RoutingRuntimeError,
-    RoutingTickResult, DEFAULT_ROUTE_ADVERTISEMENT_INTERVAL_SECONDS,
+    DEFAULT_ROUTE_ADVERTISEMENT_INTERVAL_SECONDS, RoutingOutboundFrame, RoutingRuntime,
+    RoutingRuntimeError, RoutingTickResult, node_id_from_signing_key,
 };
