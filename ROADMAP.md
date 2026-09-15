@@ -1,143 +1,55 @@
 # AetherNet Roadmap
 
 ## Phase 1 - Core Protocol Foundation [COMPLETE]
-
-- Native Aether L3/L4 boundary defined.
-- Native 256-bit Aether address primitive.
-- Native L3 packet envelope and protocol invariants.
-- Secure-by-default runtime security profiles.
-- Rotating privacy-token primitive separated from stable identity.
-- Allocation-free replay protection window.
-- Security/privacy/performance acceptance gate documented.
+- Native Aether L3/L4 boundary, addressing, security profiles, privacy tokens and replay protection.
 
 ## Phase 2 - Native L3 Network Engine [IN PROGRESS]
-
-- [x] End-to-end native addressing.
-- [x] Native route state with bounded forwarding table.
-- [x] Destination lookup and next-hop selection.
-- [x] Hop-limit enforcement during forwarding.
-- [x] Bounded fragmentation and reassembly.
-- [x] Duplicate/conflicting fragment rejection.
-- [x] Reassembly memory and timeout bounds.
-- [ ] Real multi-node forwarding integrated into the authenticated runtime data path.
+- [x] Native addressing, forwarding, hop limits, bounded fragmentation/reassembly.
+- [ ] Runtime-integrated multi-node forwarding.
 
 ## Phase 3 - Native L4 Transport Engine [IN PROGRESS]
-- [x] Native L4 segment format with explicit sequence, cumulative ACK, and receive window.
-- [x] Datagram transport mode.
-- [x] Ordered stream transport.
-- [x] Reliable stream retransmission and bounded in-flight state.
-- [x] Receive-window flow control.
-- [x] AIMD congestion control and bounded retransmission timing.
-- [x] Realtime freshness-oriented delivery.
-- [x] FIN/RESET session lifecycle.
-- [ ] Live L4 session multiplexing over the authenticated native L3 runtime.
-- [ ] Multi-node transport integration tests.
+- [x] Native segments, datagrams, reliable streams, flow control, congestion control, realtime mode and session lifecycle.
+- [ ] Live L4 multiplexing over authenticated L3 and multi-node transport tests.
 
 ## Phase 4 - Distributed Routing Engine [IMPLEMENTED - INTEGRATION PENDING]
-- [x] Distributed topology database with explicit node/link bounds.
-- [x] Versioned route advertisements with monotonic sequence convergence.
-- [x] Advertisement expiry and topology garbage collection.
-- [x] Native metric aggregation across paths.
-- [x] Priority-aware shortest-path selection.
-- [x] Bounded alternate-path / multipath discovery.
-- [x] Loop-free path construction.
-- [x] Search-computation budget to prevent unbounded routing work.
-- [ ] Signed/authenticated route-advertisement integration with the peer security plane.
-- [ ] Runtime dissemination and convergence across live Aether nodes.
-- [ ] Failure-repair integration with the Phase 2 forwarding engine.
+- [x] Bounded topology, monotonic advertisements, metrics, shortest paths, multipath and loop avoidance.
+- [ ] Signed advertisements, live dissemination, L3 integration and failure repair.
 
 ## Phase 5 - Physical Underlay Engine [IMPLEMENTED - PLATFORM INTEGRATION PENDING]
-- [x] Transport-independent physical adapter contract.
-- [x] Explicit underlay properties including MTU, bandwidth, latency, energy, broadcast and multicast capabilities.
-- [x] Bounded physical adapter registry.
-- [x] Bounded physical-link registry and validation.
-- [x] Discovery and per-transport refresh.
-- [x] Deterministic active-link selection.
-- [x] MTU-aware frame validation before transmission.
-- [x] Aggregated device physical-capability reporting.
-- [x] Ethernet, Wi-Fi, Wi-Fi Direct, Bluetooth LE and UWB descriptors.
-- [ ] OS-specific hardware drivers.
-- [ ] Live L1/L2 transmission integration.
-- [ ] Hardware interoperability tests.
+- [x] Carrier-neutral adapter model, capabilities, bounded registries, discovery, selection and MTU validation.
+- [ ] OS drivers, live L1/L2 transmission and hardware interoperability.
 
 ## Phase 6 - Network Formation & Discovery [IMPLEMENTED - RUNTIME INTEGRATION PENDING]
-- [x] Bounded bootstrap peers.
-- [x] Isolated/forming/connected/partitioned state machine.
-- [x] Bounded peer, service and resource discovery state.
-- [x] Version monotonicity and expiry cleanup.
-- [x] Partition generation tracking and recovery transitions.
-- [ ] Live authenticated dissemination.
-- [ ] Physical discovery integration.
-- [ ] Routing convergence integration.
-- [ ] Multi-node partition/heal tests.
+- [x] Bootstrap, formation state machine, bounded peer/service/resource discovery, versions, TTLs and partition generations.
+- [ ] Live authenticated dissemination, physical/routing integration and partition/heal tests.
 
 ## Phase 7 - Naming & Resource Resolution [IMPLEMENTED - DISTRIBUTED INTEGRATION PENDING]
-- [x] Canonical Aether name normalization and validation.
-- [x] Fixed-size hashed name identifiers.
-- [x] Signed name-to-resource records.
-- [x] Monotonic record-version convergence.
-- [x] Bounded naming database and resolver cache.
-- [x] TTL/expiry validation and cleanup.
-- [ ] Distributed dissemination.
-- [ ] Delegation and ownership transfer.
-- [ ] Native resolver traffic over Aether L3/L4.
-- [ ] Phase 6/8 integration.
+- [x] Canonical names, hashed identifiers, signed records, version convergence, bounded database/cache and TTLs.
+- [ ] Distributed dissemination, delegation, native resolver traffic and Phase 6/8 integration.
 
 ## Phase 8 - Distributed Storage & CDN [IMPLEMENTED - DISTRIBUTED INTEGRATION PENDING]
-- [x] Content-addressed chunk digests.
-- [x] Bounded local chunk storage.
-- [x] Read-time chunk integrity verification.
-- [x] Deduplication and TTL garbage collection.
-- [x] Versioned manifest convergence.
-- [x] Signed provider advertisements.
-- [x] Provider selection by capacity/reliability/cost.
-- [x] Replica repair planning.
-- [ ] Native storage request/response over Aether L3/L4.
-- [ ] Live replica transfer and automatic repair.
-- [ ] Phase 6/7 integration.
-- [ ] Multi-node failure/recovery tests.
-- [ ] Strong provider NodeId/signing-key binding.
+- [x] Content-addressed chunks, bounded storage, integrity verification, deduplication, manifests, provider advertisements, provider selection and repair planning.
+- [ ] Native storage messages, live transfer/repair, Phase 6/7 integration, multi-node recovery tests and provider identity binding.
 
 ## Phase 9 - Distributed Compute & Services [IMPLEMENTED - EXECUTION INTEGRATION PENDING]
-- [x] Cryptographically-derived workload identifiers.
-- [x] Bounded compute-node registry.
-- [x] Capacity-aware workload requirements.
-- [x] Versioned workload submission.
-- [x] Deterministic replica placement.
-- [x] Migration permission and target-capacity checks.
-- [x] Placement bounds and expiry cleanup.
-- [ ] Authenticated capacity advertisements.
-- [ ] Sandboxed workload execution.
-- [ ] CPU/memory/storage/network quota enforcement.
-- [ ] Node attestation and workload provenance.
-- [ ] Failure-triggered rescheduling and state migration.
-- [ ] Live multi-node compute integration tests.
+- [x] Workload identifiers, bounded compute nodes/workloads/placements, capacity requirements, versioning, deterministic replica placement and controlled migration.
+- [ ] Authenticated capacity adverts, sandboxed execution, resource quotas, attestation/provenance, failure rescheduling/state migration and multi-node execution tests.
 
 ## Phase 10 - Aether Hosting [IMPLEMENTED - LIVE SERVING INTEGRATION PENDING]
-- [x] Upload deployment input model.
-- [x] Native domain canonicalization.
-- [x] Deterministic artifact hashing.
-- [x] Bounded file-size/count validation.
-- [x] Artifact verification.
-- [x] Site manifest/site identity generation.
-- [x] Rollback target metadata.
+- [x] Upload model, domain canonicalization, deterministic artifact identity, bounded file validation, artifact verification, site manifest/identity and rollback metadata.
 - [x] GitHub source descriptor model.
-- [ ] Live GitHub repository import.
-- [ ] Isolated build workers.
-- [ ] Signed deployment authorization.
-- [ ] Phase 7 name publication and Phase 8 distributed artifact replication.
-- [ ] Native HTTP/application serving over Aether L3/L4.
-- [ ] Cache invalidation and automatic rollback.
-- [ ] Multi-node hosting tests.
+- [ ] Live GitHub import, isolated builds, signed deployment authorization, Phase 7/8 publish integration, native serving, cache invalidation/rollback and multi-node hosting tests.
 
-## Phase 11 - Aether Connect
-- Native messaging, voice, video, presence, groups and offline delivery.
+## Phase 11 - Aether Connect [IMPLEMENTED - LIVE COMMUNICATION INTEGRATION PENDING]
+- [x] Native conversation identity, presence model, media references, bounded groups and offline message queue with expiry.
+- [ ] End-to-end encryption/session establishment, live L4 messaging, call negotiation, media transport, relay selection and multi-device synchronization.
 
-## Phase 12 - Internet Interoperability
-- Optional Aether gateways and protocol translation.
+## Phase 12 - Internet Interoperability [IMPLEMENTED - GATEWAY RUNTIME INTEGRATION PENDING]
+- [x] Bounded gateway directory, protocol/direction modelling, TTL expiry and deterministic lowest-cost selection.
+- [ ] Live protocol translation, gateway authorization, egress filtering, accounting, abuse controls and privacy policy enforcement.
 
 ## Phase 13 - AetherNet OS & Operatives
-- Lightweight infrastructure OS, L0-L5 operation, provisioning, updates, recovery and monitoring.
+- Lightweight infrastructure OS, L0-L5 capability operation, provisioning, updates, recovery and monitoring.
 
 ## Phase 14 - Global Hardening
 - Adversarial testing, large-scale routing/discovery validation, abuse resistance, protocol upgrade and production certification.
