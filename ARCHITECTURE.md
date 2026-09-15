@@ -45,7 +45,7 @@ AetherNet separates stable cryptographic identity from ephemeral network-visible
 
 ## Phase 2 - Native L3 Network Engine
 
-Phase 2 adds the native forwarding and packet-lifecycle machinery above authenticated Aether links.
+Phase 2 adds the first native network-plane machinery above authenticated Aether links.
 
 ### Native forwarding model
 
@@ -87,128 +87,89 @@ Aether source address
 
 Native L3 fragmentation uses the packet flow identifier plus bounded fragment metadata carried inside fragmented payloads. The reassembly table has explicit entry, byte, and timeout limits. Duplicate identical fragments are harmless; conflicting fragments for the same flow/index are rejected.
 
-### Current Phase 2 status
-
-Implemented:
-
-- native 256-bit addressing;
-- native L3 packet encoding and decoding;
-- bounded route state;
-- destination lookup and next-hop selection;
-- hop-limit enforcement;
-- native fragmentation;
-- bounded reassembly;
-- conflict/duplicate fragment handling;
-- conformance tests for forwarding and reassembly.
-
-Still required before Phase 2 can be marked complete:
-
-- connect L3 forwarding to the authenticated runtime data path;
-- exercise forwarding across multiple live Aether nodes;
-- add integration tests for multi-hop delivery under real underlays.
-
 ## Phase 3 - Native L4 Transport Engine
 
-Phase 3 implements transport semantics above native L3. L4 never requires an IP address, TCP connection, UDP socket, or a specific physical underlay.
+Phase 3 provides transport semantics above native L3 without importing TCP/IP assumptions.
 
-### Wire envelope
+### Transport contract
 
-The L4 segment contains:
+The native L4 segment carries a flow identifier, sequence number, explicit cumulative acknowledgement number, advertised receive window, transport mode, flags, and bounded payload. This separates data sequencing from acknowledgement state and allows different transport modes to share one envelope.
 
-```text
-magic | version | mode | flags | reserved
-flow_id
-sequence
-acknowledgement
-receive_window
-payload_length
-payload
-```
-
-The cumulative acknowledgement identifies the next expected sequence number at the receiver. The receive window advertises bounded receive capacity so a sender can respect both congestion and peer buffering limits.
-
-### Transport modes
-
-`Datagram` provides message delivery without retransmission or ordering guarantees. `Stream` and `ReliableStream` provide ordered delivery with bounded buffering, cumulative acknowledgements, retransmission and congestion control. `Realtime` prefers freshness over delivery guarantees: stale sequence numbers are dropped instead of being retransmitted.
-
-### Reliable session lifecycle
+### Session modes
 
 ```text
-             +-----------+
-             |   CLOSED  |
-             +-----+-----+
-                   |
-                 SYN
-                   v
-             +-----------+
-             | SYN-SENT  |
-             +-----+-----+
-                   |
-                  ACK
-                   v
-             +-----------+
-             |ESTABLISHED|
-             +--+-----+--+
-                |     |
-               FIN   RESET
-                |     |
-                v     v
-          +---------+ +-------+
-          | FIN-SENT| | RESET|
-          +----+----+ +-------+
-               |
-              ACK
-               v
-          +---------+
-          | CLOSED  |
-          +---------+
+Datagram       best-effort message delivery
+Stream         ordered byte/message sequencing with reliability machinery
+ReliableStream ordered reliable delivery with retransmission
+Realtime       freshness-first delivery; stale frames are discarded
 ```
 
-### Reliability and flow control
+Reliable modes use bounded in-flight state, cumulative acknowledgements, receive-window flow control, retransmission timers, and AIMD congestion control. Realtime mode intentionally avoids reliable retransmission so late media does not consume transport capacity after it becomes obsolete.
 
-Reliable sessions retain a bounded set of outstanding segments. A receiver buffers a bounded number of out-of-order segments. Duplicate identical sequence data is harmless; conflicting data for an already-buffered sequence is rejected. Cumulative acknowledgements release outstanding data.
+## Phase 4 - Distributed Routing Engine
 
-### Congestion control
+Phase 4 turns local L3 forwarding state into a distributed route-convergence system.
 
-The sender maintains an explicit congestion window and peer receive window. New data is admitted only when both limits permit it. ACKs increase the congestion window using additive growth, while retransmission loss applies multiplicative reduction. Retransmission timeout is bounded between configured minimum and maximum values.
+### Topology model
 
-This is deliberately implemented as an Aether-native transport policy rather than inheriting TCP state or algorithms from the traditional Internet stack.
+```text
+       advertisement
+ Node A ----------------> Node B
+   |                        |
+   | metrics                | metrics
+   v                        v
+ Node C ----------------> Node D
+             alternate path
+```
 
-### Realtime behavior
+Each routing node maintains a bounded directed topology graph. A `RouteAdvertisement` describes an origin node, a monotonically increasing sequence number, validity interval, and bounded neighbor list. Newer advertisements replace older state for the same origin; stale advertisements are ignored. Expired links are removed by garbage collection.
 
-Realtime flows such as voice, live video, control input and interactive media should not stall behind lost packets. The current L4 engine tracks the newest sequence received and discards stale arrivals rather than scheduling recovery traffic.
+### Metric composition
 
-### Current Phase 3 status
+Per-link metrics include latency, jitter, packet loss, bandwidth, reliability, monetary cost, energy cost, and hop count. Multi-hop routes combine these with network-safe composition rules:
+
+- latency and jitter add;
+- bandwidth follows the bottleneck minimum;
+- monetary and energy costs add;
+- reliability compounds;
+- end-to-end loss compounds;
+- hop count adds.
+
+Priority-aware scoring then selects routes according to the traffic class used by the existing Aether route metric system.
+
+### Convergence and failure behavior
+
+Route advertisements are accepted only with valid lifetimes, bounded neighbor counts, valid metrics, and monotonic origin sequence numbers. This prevents old topology information from overwriting newer state and bounds hostile routing input.
+
+### Multipath and loop avoidance
+
+The engine can return a bounded set of alternate paths rather than only one route. Path expansion rejects nodes already present in the candidate path, preventing routing loops during computation. A global search-state budget prevents a large or adversarial topology from causing unbounded route calculation.
+
+### Phase 4 integration gate
 
 Implemented:
 
-- native L4 segment encoding/decoding;
-- explicit sequence and cumulative acknowledgement fields;
-- receive-window advertisement;
-- datagram mode;
-- ordered stream mode;
-- reliable stream mode;
-- bounded receive buffers;
-- bounded outstanding-send state;
-- retransmission timers;
-- AIMD congestion response;
-- FIN/RESET lifecycle controls;
-- flow validation;
-- realtime stale-packet suppression;
-- unit/conformance tests for the transport state machine.
+- distributed topology database;
+- bounded node/link/advertisement state;
+- monotonic route-advertisement convergence;
+- topology expiration and garbage collection;
+- native metric aggregation;
+- priority-aware route selection;
+- bounded alternate-path discovery;
+- loop-free candidate paths;
+- bounded routing computation.
 
-Still required before Phase 3 can be marked complete:
+Still required before Phase 4 is production-complete:
 
-- integrate session management with the native L3 runtime data path;
-- multiplex independent L4 flows through the node runtime;
-- add live multi-node transport interoperability tests;
-- validate performance and loss behavior on real heterogeneous underlays.
+- authenticate/sign route advertisements using the established peer security layer;
+- disseminate advertisements through the live node runtime;
+- connect route convergence directly to Phase 2's native L3 forwarding table;
+- implement live failure-triggered repair and multi-node integration tests.
 
 ## Later phases
 
-Phase 4 builds distributed routing and route convergence.
-Phase 5 expands physical underlays.
-Phase 6 builds global peer/discovery formation.
+Phase 5 expands physical underlays and capability negotiation.
+Phase 6 builds global peer/discovery formation and partition recovery.
 Phase 7 builds distributed naming and resource resolution.
 Phase 8 builds distributed storage/content delivery.
 Phase 9 builds distributed compute/service infrastructure.
