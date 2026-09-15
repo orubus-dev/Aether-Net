@@ -1,38 +1,38 @@
-# AetherNet OS
+# AetherNet OS host architecture
 
-AetherNet OS is the native node operating environment for AetherNet. It exposes the Aether protocol stack directly and treats conventional Internet access as an optional gateway capability.
+AetherNet OS is being built as a native host environment around the Aether protocol core.
+The goal is operating-system-grade integration without moving platform-specific policy into
+the network protocol itself.
 
-## Transfer model
+## Current host layer
 
-Large resources are transferred as bounded Aether data packets. Each node can independently configure an upload bandwidth ceiling, download bandwidth ceiling, maximum packet payload, and maximum concurrent transfers.
+`core/src/platform.rs` provides:
 
-The default implementation uses a 2,000,000 bit/s upload ceiling and a 10,000,000 bit/s download ceiling. These are configurable per node; they are scheduler limits, not claims about the physical carrier's actual capacity.
+- canonical state/config/runtime/log paths per host platform;
+- lifecycle states from Created through Running, Degraded, Stopping, Stopped and Failed;
+- restart policies and bounded restart attempts;
+- isolated directory initialization suitable for service installation.
 
-A transfer therefore behaves like:
+`aethernet-os/daemon` provides the long-running host process and consumes the same runtime
+boundary on Unix-like systems. Linux has a systemd unit with the capabilities required for
+raw packet/interface operations. Windows has a Service Control Manager entrypoint using the
+`windows-service` crate.
 
-```text
-ContentId
-   |
-   v
-Manifest / chunks
-   |
-   v
-Aether data packets
-   |
-   +--> upload governor / download governor
-   |
-   v
-Native L3 -> L4 -> physical carrier
-```
+## Production operating-system track
 
-A 2 Mb/s upload setting and a 10 Mb/s download setting are separate budgets. The sender's upload budget and receiver's download budget both constrain an actual transfer.
+The next layers are platform integration, not protocol redesign:
 
-## Capability levels
+1. Native service/process supervision with health checks, dependency ordering and crash recovery.
+2. Persistent configuration and identity storage with atomic updates and recovery semantics.
+3. Native network-interface control and route provisioning on Linux and Windows.
+4. Hardware capability discovery and power-aware operation for laptops and phones.
+5. Sandboxed service execution, resource limits and per-service permissions.
+6. Secure signed update delivery with verified installation, rollback and boot-time recovery.
+7. Structured telemetry, diagnostics, crash dumps and support bundles.
+8. Installer/uninstaller, firewall integration and user-facing control surfaces.
+9. Cross-platform interoperability tests and real-hardware soak testing.
+10. Security audit and production certification.
 
-L0 through L5 describe node capability, not different network protocols. Higher levels can expose greater relay, storage, compute and infrastructure capacity.
-
-## Current implementation
-
-`core/src/operative.rs` implements bandwidth limits, packet budgets, transfer identifiers, transfer state and packet scheduling. `core/src/operative_os.rs` implements L0-L5 capability state plus boot, health, degraded and recovery lifecycle primitives.
-
-These are protocol/runtime primitives. Persistent disk management, real hardware drivers, signed OS update bootstrapping and full process/service supervision remain platform-integration work.
+The current code is a host foundation, not a finished replacement for Windows. “Windows-level”
+capability here means reaching comparable service lifecycle, hardware integration, recovery,
+security, diagnostics and deployment maturity through native adapters and extensive testing.
