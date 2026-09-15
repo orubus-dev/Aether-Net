@@ -5,8 +5,8 @@ use super::engine::{PhysicalAdapterExt, UnderlayProperties};
 use super::interface::{PhysicalAdapter, PhysicalDriver, PhysicalError};
 use super::link::{PhysicalLink, PhysicalLinkId};
 use libc::{
-    AF_PACKET, ETH_P_ALL, ETH_P_IPV6, ETH_P_LOOP, ETH_P_IP, FIONREAD, IFNAMSIZ, SOCK_RAW,
-    SOL_SOCKET, SO_RCVBUF, c_char, c_int, if_nametoindex, sockaddr, sockaddr_ll,
+    AF_PACKET, ETH_P_ALL, ETH_P_IP, ETH_P_IPV6, ETH_P_LOOP, FIONREAD, IFNAMSIZ, SO_RCVBUF,
+    SOCK_RAW, SOL_SOCKET, c_char, c_int, if_nametoindex, sockaddr, sockaddr_ll,
 };
 use sha2::{Digest, Sha256};
 use std::ffi::CString;

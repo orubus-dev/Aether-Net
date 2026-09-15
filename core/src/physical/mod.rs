@@ -4,9 +4,9 @@ pub mod driver;
 pub mod engine;
 pub mod interface;
 pub mod link;
-pub mod runtime;
 #[cfg(target_os = "linux")]
 pub mod linux_ethernet;
+pub mod runtime;
 
 pub use adapters::{
     ConfiguredAdapter, bluetooth_le_adapter, direct_link_adapter, ethernet_adapter, link_id,
@@ -20,6 +20,6 @@ pub use engine::{
 };
 pub use interface::{PhysicalAdapter, PhysicalDriver, PhysicalError};
 pub use link::{PhysicalLink, PhysicalLinkId};
-pub use runtime::{DEFAULT_MAX_DRIVERS, PhysicalRuntime};
 #[cfg(target_os = "linux")]
 pub use linux_ethernet::{AETHER_ETHERTYPE, LinuxEthernetDriver};
+pub use runtime::{DEFAULT_MAX_DRIVERS, PhysicalRuntime};
