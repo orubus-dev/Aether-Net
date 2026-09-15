@@ -1,4 +1,5 @@
 pub mod control_plane;
+pub mod control_plane_runtime;
 pub mod distributed;
 pub mod distributed_fixed;
 pub mod engine;
@@ -6,10 +7,10 @@ pub mod gateway;
 pub mod metric;
 pub mod path;
 
-pub use control_plane::{
+pub use control_plane_runtime::{
     RoutingControlError, RoutingControlPlane, RoutingPeer, SignedRouteAdvertisement,
     DEFAULT_MAX_DYNAMIC_ROUTES, DEFAULT_MAX_NEIGHBORS, DEFAULT_MAX_PEERS,
-    ROUTING_PUBLIC_KEY_LENGTH, ROUTING_SIGNATURE_LENGTH, ROUTING_WIRE_VERSION,
+    ROUTING_PUBLIC_KEY_LENGTH, ROUTING_SIGNATURE_LENGTH,
 };
 
 pub use distributed_fixed::{
