@@ -2,6 +2,12 @@ use crate::identity::device::DeviceId;
 use crate::network::NodeId;
 use crate::physical::PhysicalTransport;
 
+pub mod gossip;
+pub mod gossip_state;
+
+pub use gossip::{DiscoveryGossipError, SignedDiscoveryAdvertisement};
+pub use gossip_state::{DiscoveryGossipState, DEFAULT_MAX_ADVERTISEMENT_ORIGINS};
+
 pub const DEFAULT_MAX_PEERS: usize = 16_384;
 pub const DEFAULT_MAX_SERVICES: usize = 16_384;
 pub const DEFAULT_MAX_RESOURCES: usize = 65_536;
@@ -19,6 +25,7 @@ pub enum DiscoveryKind {
 pub enum DiscoveryError {
     CapacityExceeded,
     InvalidRecord,
+    InvalidAdvertisement,
     Expired,
     Duplicate,
 }
