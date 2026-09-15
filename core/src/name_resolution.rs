@@ -1,4 +1,4 @@
-use crate::naming::{canonicalize_name, NameError, NameHash, NameRecord, NamingEngine, ResourceId};
+use crate::naming::{NameError, NameHash, NameRecord, NamingEngine, ResourceId, canonicalize_name};
 use crate::network::NodeId;
 
 pub const DEFAULT_MAX_DELEGATIONS: usize = 16_384;
@@ -97,10 +97,12 @@ impl NameResolutionEngine {
 
     pub fn resolve(&mut self, name: &str, now: u64) -> Result<ResourceId, ResolutionError> {
         let canonical = canonicalize_name(name).map_err(ResolutionError::InvalidName)?;
-        self.naming.resolve(&canonical, now).map_err(|error| match error {
-            NameError::NotFound | NameError::Stale => ResolutionError::NameNotFound,
-            other => ResolutionError::InvalidName(other),
-        })
+        self.naming
+            .resolve(&canonical, now)
+            .map_err(|error| match error {
+                NameError::NotFound | NameError::Stale => ResolutionError::NameNotFound,
+                other => ResolutionError::InvalidName(other),
+            })
     }
 
     pub fn expire(&mut self, now: u64) -> usize {
@@ -132,9 +134,17 @@ mod tests {
             expires_at: 100,
         };
         assert!(engine.add_delegation(delegation, 10).unwrap());
-        assert!(!engine
-            .add_delegation(NameDelegation { version: 0, ..delegation }, 10)
-            .unwrap());
+        assert!(
+            !engine
+                .add_delegation(
+                    NameDelegation {
+                        version: 0,
+                        ..delegation
+                    },
+                    10
+                )
+                .unwrap()
+        );
         assert_eq!(engine.delegation_count(), 1);
     }
 
