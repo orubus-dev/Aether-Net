@@ -158,6 +158,12 @@ impl NetworkFormationEngine {
         self.resources.len()
     }
 
+    pub fn begin_formation(&mut self) {
+        if self.state == FormationState::Isolated {
+            self.state = FormationState::Forming;
+        }
+    }
+
     pub fn add_bootstrap(&mut self, peer: BootstrapPeer) -> Result<(), DiscoveryError> {
         if self
             .bootstrap
@@ -170,9 +176,7 @@ impl NetworkFormationEngine {
             return Err(DiscoveryError::CapacityExceeded);
         }
         self.bootstrap.push(peer);
-        if self.state == FormationState::Isolated {
-            self.state = FormationState::Forming;
-        }
+        self.begin_formation();
         Ok(())
     }
 
@@ -200,6 +204,16 @@ impl NetworkFormationEngine {
         self.peers.push(record);
         self.state = FormationState::Connected;
         Ok(true)
+    }
+
+    pub fn forget_peer(&mut self, node_id: NodeId) -> bool {
+        let before = self.peers.len();
+        self.peers.retain(|peer| peer.node_id != node_id);
+        let removed = before != self.peers.len();
+        if removed {
+            self.recompute_state();
+        }
+        removed
     }
 
     pub fn publish_service(
@@ -344,6 +358,17 @@ mod tests {
             .unwrap()
         );
         assert_eq!(e.state(), FormationState::Connected);
+    }
+    #[test]
+    fn forgetting_last_peer_returns_to_isolated() {
+        let mut e = NetworkFormationEngine::new();
+        e.observe_peer(
+            PeerRecord::new(node(1), device(1), PhysicalTransport::Wifi, 0),
+            1,
+        )
+        .unwrap();
+        assert!(e.forget_peer(node(1)));
+        assert_eq!(e.state(), FormationState::Isolated);
     }
     #[test]
     fn partition_recovery_drops_expired_peers() {
