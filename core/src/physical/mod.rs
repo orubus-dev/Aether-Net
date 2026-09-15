@@ -6,6 +6,8 @@ pub mod interface;
 pub mod link;
 #[cfg(target_os = "linux")]
 pub mod linux_ethernet;
+#[cfg(target_os = "linux")]
+pub mod linux_underlay;
 pub mod runtime;
 
 pub use adapters::{
@@ -22,4 +24,6 @@ pub use interface::{PhysicalAdapter, PhysicalDriver, PhysicalError};
 pub use link::{PhysicalLink, PhysicalLinkId};
 #[cfg(target_os = "linux")]
 pub use linux_ethernet::{AETHER_ETHERTYPE, LinuxEthernetDriver};
+#[cfg(target_os = "linux")]
+pub use linux_underlay::{LinuxInterface, LinuxInterfaceAnalytics, LinuxUnderlay};
 pub use runtime::{DEFAULT_MAX_DRIVERS, PhysicalRuntime};
