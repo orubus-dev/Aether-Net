@@ -6,7 +6,7 @@ pub mod gossip;
 pub mod gossip_state;
 
 pub use gossip::{DiscoveryGossipError, SignedDiscoveryAdvertisement};
-pub use gossip_state::{DiscoveryGossipState, DEFAULT_MAX_ADVERTISEMENT_ORIGINS};
+pub use gossip_state::{DEFAULT_MAX_ADVERTISEMENT_ORIGINS, DiscoveryGossipState};
 
 pub const DEFAULT_MAX_PEERS: usize = 16_384;
 pub const DEFAULT_MAX_SERVICES: usize = 16_384;

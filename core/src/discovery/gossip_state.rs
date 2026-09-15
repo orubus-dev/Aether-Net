@@ -54,7 +54,8 @@ impl DiscoveryGossipState {
             if self.seen.len() >= self.max_origins {
                 return Err(DiscoveryError::CapacityExceeded);
             }
-            self.seen.push((advertisement.origin, advertisement.sequence));
+            self.seen
+                .push((advertisement.origin, advertisement.sequence));
         }
 
         let mut changed = false;
@@ -117,7 +118,10 @@ mod tests {
             &[],
         )
         .unwrap();
-        let old = SignedDiscoveryAdvertisement { sequence: 1, ..ad.clone() };
+        let old = SignedDiscoveryAdvertisement {
+            sequence: 1,
+            ..ad.clone()
+        };
         let mut state = DiscoveryGossipState::new();
         let mut engine = NetworkFormationEngine::new();
         assert!(state.accept(&mut engine, &old, 110).unwrap());

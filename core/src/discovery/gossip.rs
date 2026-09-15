@@ -71,9 +71,7 @@ impl SignedDiscoveryAdvertisement {
             resources: resources.to_vec(),
             signature: [0; DISCOVERY_GOSSIP_SIGNATURE_LENGTH],
         };
-        advertisement.signature = signing_key
-            .sign(&advertisement.signing_bytes())
-            .to_bytes();
+        advertisement.signature = signing_key.sign(&advertisement.signing_bytes()).to_bytes();
         Ok(advertisement)
     }
 
@@ -104,11 +102,12 @@ impl SignedDiscoveryAdvertisement {
     pub fn encode(&self) -> Result<Vec<u8>, DiscoveryGossipError> {
         let mut bytes = self.signing_bytes();
         bytes.extend_from_slice(&self.signature);
-        if bytes.len() > HEADER_LENGTH
-            + MAX_ADVERTISEMENT_PEERS * PEER_LENGTH
-            + MAX_ADVERTISEMENT_SERVICES * SERVICE_LENGTH
-            + MAX_ADVERTISEMENT_RESOURCES * RESOURCE_LENGTH
-            + DISCOVERY_GOSSIP_SIGNATURE_LENGTH
+        if bytes.len()
+            > HEADER_LENGTH
+                + MAX_ADVERTISEMENT_PEERS * PEER_LENGTH
+                + MAX_ADVERTISEMENT_SERVICES * SERVICE_LENGTH
+                + MAX_ADVERTISEMENT_RESOURCES * RESOURCE_LENGTH
+                + DISCOVERY_GOSSIP_SIGNATURE_LENGTH
         {
             return Err(DiscoveryGossipError::CapacityExceeded);
         }
@@ -281,10 +280,7 @@ fn encode_service(value: &ServiceRecord, out: &mut Vec<u8>) {
     out.extend_from_slice(&value.expires_at.to_be_bytes());
 }
 
-fn decode_service(
-    bytes: &[u8],
-    cursor: &mut usize,
-) -> Result<ServiceRecord, DiscoveryGossipError> {
+fn decode_service(bytes: &[u8], cursor: &mut usize) -> Result<ServiceRecord, DiscoveryGossipError> {
     let mut service_id = [0u8; 16];
     read_exact(bytes, cursor, &mut service_id)?;
     let owner = read_node_id(bytes, cursor)?;
@@ -450,18 +446,9 @@ mod tests {
         let key = DeviceSigningKey::generate().unwrap();
         let device_id = DeviceId::from_public_key(&key.verifying_key());
         let origin = node_id_from_public_key(&key.verifying_key().to_bytes());
-        let advertisement = SignedDiscoveryAdvertisement::new(
-            &key,
-            origin,
-            device_id,
-            1,
-            10,
-            50,
-            &[],
-            &[],
-            &[],
-        )
-        .unwrap();
+        let advertisement =
+            SignedDiscoveryAdvertisement::new(&key, origin, device_id, 1, 10, 50, &[], &[], &[])
+                .unwrap();
         let mut encoded = advertisement.encode().unwrap();
         encoded[20] ^= 1;
         let decoded = SignedDiscoveryAdvertisement::decode(&encoded).unwrap();
@@ -477,17 +464,9 @@ mod tests {
         let key_b = DeviceSigningKey::generate().unwrap();
         let device_a = DeviceId::from_public_key(&key_a.verifying_key());
         let origin_a = node_id_from_public_key(&key_a.verifying_key().to_bytes());
-        assert!(SignedDiscoveryAdvertisement::new(
-            &key_b,
-            origin_a,
-            device_a,
-            1,
-            1,
-            20,
-            &[],
-            &[],
-            &[],
-        )
-        .is_err());
+        assert!(
+            SignedDiscoveryAdvertisement::new(&key_b, origin_a, device_a, 1, 1, 20, &[], &[], &[],)
+                .is_err()
+        );
     }
 }
