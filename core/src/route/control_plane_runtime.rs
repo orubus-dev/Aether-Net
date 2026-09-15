@@ -243,18 +243,13 @@ impl RoutingControlPlane {
         {
             return Err(RoutingControlError::InvalidAdvertisement);
         }
-        if signed
-            .advertisement
-            .neighbors
-            .iter()
-            .any(|neighbor| {
-                neighbor.node_id == signed.advertisement.origin
-                    || neighbor.metrics.bandwidth_bps == 0
-                    || neighbor.metrics.packet_loss_ppm > 1_000_000
-                    || neighbor.metrics.reliability_ppm > 1_000_000
-                    || neighbor.metrics.hop_count == 0
-            })
-        {
+        if signed.advertisement.neighbors.iter().any(|neighbor| {
+            neighbor.node_id == signed.advertisement.origin
+                || neighbor.metrics.bandwidth_bps == 0
+                || neighbor.metrics.packet_loss_ppm > 1_000_000
+                || neighbor.metrics.reliability_ppm > 1_000_000
+                || neighbor.metrics.hop_count == 0
+        }) {
             return Err(RoutingControlError::InvalidAdvertisement);
         }
         if !signed.verify() {
