@@ -21,27 +21,32 @@
 - [x] Reassembly memory and timeout bounds.
 - [ ] Real multi-node forwarding integrated into the authenticated runtime data path.
 
-## Phase 3 - Native L4 Transport Engine [IMPLEMENTED - INTEGRATION PENDING]
+## Phase 3 - Native L4 Transport Engine [IN PROGRESS]
 
-- [x] Native L4 wire envelope with flow, sequence, cumulative acknowledgement, and receive-window fields.
+- [x] Native L4 segment format with explicit sequence, cumulative ACK, and receive window.
 - [x] Datagram transport mode.
-- [x] Ordered stream transport mode.
-- [x] Reliable stream mode with bounded in-flight state.
-- [x] Cumulative acknowledgements.
-- [x] Bounded receive buffering and advertised receive window.
-- [x] Retransmission timers with bounded RTO.
-- [x] AIMD congestion-window growth and loss response.
-- [x] Realtime transport that drops stale packets instead of retransmitting them.
-- [x] FIN/RESET lifecycle controls and flow validation.
-- [ ] Native L4 session multiplexing integrated into the live runtime data path.
-- [ ] Multi-node transport integration and interoperability tests.
+- [x] Ordered stream transport.
+- [x] Reliable stream retransmission and bounded in-flight state.
+- [x] Receive-window flow control.
+- [x] AIMD congestion control and bounded retransmission timing.
+- [x] Realtime freshness-oriented delivery.
+- [x] FIN/RESET session lifecycle.
+- [ ] Live L4 session multiplexing over the authenticated native L3 runtime.
+- [ ] Multi-node transport integration tests.
 
-## Phase 4 - Distributed Routing Engine
+## Phase 4 - Distributed Routing Engine [IMPLEMENTED - INTEGRATION PENDING]
 
-- Route discovery.
-- Distributed topology.
-- Alternate paths and repair.
-- Multipath and adaptive routing.
+- [x] Distributed topology database with explicit node/link bounds.
+- [x] Versioned route advertisements with monotonic sequence convergence.
+- [x] Advertisement expiry and topology garbage collection.
+- [x] Native metric aggregation across paths.
+- [x] Priority-aware shortest-path selection.
+- [x] Bounded alternate-path / multipath discovery.
+- [x] Loop-free path construction.
+- [x] Search-computation budget to prevent unbounded routing work.
+- [ ] Signed/authenticated route-advertisement integration with the peer security plane.
+- [ ] Runtime dissemination and convergence across live Aether nodes.
+- [ ] Failure-repair integration with the Phase 2 forwarding engine.
 
 ## Phase 5 - Physical Underlay Engine
 
