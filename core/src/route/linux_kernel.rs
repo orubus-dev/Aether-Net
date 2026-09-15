@@ -5,12 +5,16 @@
 //! kernel-maintained interface counters for analytics.
 
 use std::io;
+#[cfg(target_os = "linux")]
 use std::path::Path;
+
+const MAX_INTERFACE_NAME_LENGTH: usize = 16;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct KernelInterfaceConfig {
     pub mtu: u32,
 }
+
 impl Default for KernelInterfaceConfig {
     fn default() -> Self {
         Self { mtu: 1500 }
@@ -28,16 +32,20 @@ pub struct KernelInterfaceAnalytics {
     pub tx_errors: u64,
     pub tx_dropped: u64,
 }
+
 impl KernelInterfaceAnalytics {
     pub fn total_packets(self) -> u64 {
         self.rx_packets.saturating_add(self.tx_packets)
     }
+
     pub fn total_bytes(self) -> u64 {
         self.rx_bytes.saturating_add(self.tx_bytes)
     }
+
     pub fn total_drops(self) -> u64 {
         self.rx_dropped.saturating_add(self.tx_dropped)
     }
+
     pub fn total_errors(self) -> u64 {
         self.rx_errors.saturating_add(self.tx_errors)
     }
@@ -50,6 +58,7 @@ pub enum LinuxKernelError {
     InvalidMtu,
     Io(io::Error),
 }
+
 impl From<io::Error> for LinuxKernelError {
     fn from(value: io::Error) -> Self {
         Self::Io(value)
@@ -107,6 +116,7 @@ impl LinuxKernelInterface {
         use std::io::Read;
         Ok(self.device.read(buffer)?)
     }
+
     #[cfg(not(target_os = "linux"))]
     pub fn read_frame(&mut self, _buffer: &mut [u8]) -> Result<usize, LinuxKernelError> {
         Err(LinuxKernelError::Unsupported)
@@ -117,6 +127,7 @@ impl LinuxKernelInterface {
         use std::io::Write;
         Ok(self.device.write(frame)?)
     }
+
     #[cfg(not(target_os = "linux"))]
     pub fn write_frame(&mut self, _frame: &[u8]) -> Result<usize, LinuxKernelError> {
         Err(LinuxKernelError::Unsupported)
@@ -177,7 +188,7 @@ impl LinuxKernelInterface {
 }
 
 fn validate_name(name: &str) -> Result<(), LinuxKernelError> {
-    if name.is_empty() || name.len() >= libc::IFNAMSIZ {
+    if name.is_empty() || name.len() >= MAX_INTERFACE_NAME_LENGTH {
         return Err(LinuxKernelError::InvalidName);
     }
     if name
@@ -189,6 +200,7 @@ fn validate_name(name: &str) -> Result<(), LinuxKernelError> {
     }
     Ok(())
 }
+
 fn validate_mtu(mtu: u32) -> Result<(), LinuxKernelError> {
     if !(576..=65_535).contains(&mtu) {
         return Err(LinuxKernelError::InvalidMtu);
@@ -203,6 +215,7 @@ struct IfReq {
     flags: libc::c_short,
     mtu: libc::c_int,
 }
+
 #[cfg(target_os = "linux")]
 impl IfReq {
     fn new(name: &str) -> Result<Self, LinuxKernelError> {
@@ -228,12 +241,14 @@ fn open_control_socket() -> Result<std::os::fd::RawFd, LinuxKernelError> {
         Ok(fd)
     }
 }
+
 #[cfg(target_os = "linux")]
 fn close_fd(fd: std::os::fd::RawFd) {
     unsafe {
         libc::close(fd);
     }
 }
+
 #[cfg(target_os = "linux")]
 fn ioctl_checked(
     fd: std::os::fd::RawFd,
@@ -247,6 +262,7 @@ fn ioctl_checked(
         Ok(())
     }
 }
+
 #[cfg(target_os = "linux")]
 fn read_counter(path: impl AsRef<Path>) -> Result<u64, LinuxKernelError> {
     let text = std::fs::read_to_string(path)?;
@@ -262,10 +278,12 @@ fn read_counter(path: impl AsRef<Path>) -> Result<u64, LinuxKernelError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn default_config_is_conventional() {
         assert_eq!(KernelInterfaceConfig::default().mtu, 1500);
     }
+
     #[test]
     fn analytics_aggregate_without_overflow() {
         let analytics = KernelInterfaceAnalytics {
@@ -283,6 +301,7 @@ mod tests {
         assert_eq!(analytics.total_drops(), 5);
         assert_eq!(analytics.total_errors(), 3);
     }
+
     #[test]
     fn validates_interface_names_and_mtu() {
         assert!(validate_name("aether0").is_ok());
