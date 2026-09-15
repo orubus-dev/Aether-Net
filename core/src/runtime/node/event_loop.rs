@@ -1,11 +1,9 @@
 use crate::network::{NodeCapabilities, NodeId, NodeRole};
-
-use crate::runtime::discovery::{DiscoveryControl, DiscoveryHello, HelloAck};
-
+use crate::runtime::discovery::{
+    DiscoveryControl, DiscoveryHello, HelloAck, DISCOVERY_ADVERTISEMENT_INTERVAL_SECONDS,
+};
 use crate::runtime::node::{NodeEvent, NodeRuntimeState, NodeState};
-
 use crate::runtime::peers::RuntimePeer;
-
 use crate::transport::{MAX_DATAGRAM_SIZE, UdpTransport, UdpTransportError};
 
 use std::net::SocketAddr;
@@ -13,13 +11,12 @@ use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc;
 use tokio::time;
+
 pub const PEER_TIMEOUT: Duration = Duration::from_secs(30);
-
 pub const PEER_STALE_TIMEOUT: Duration = Duration::from_secs(15);
-
 pub const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(5);
-
 pub const HELLO_INTERVAL: Duration = Duration::from_secs(10);
+pub const DISCOVERY_GOSSIP_FANOUT: usize = 32;
 
 pub struct NodeEventLoop {
     transport: UdpTransport,
@@ -82,9 +79,13 @@ impl NodeEventLoop {
 
         self.emit_formation_if_changed().await?;
         self.broadcast_hello().await?;
+        self.broadcast_advertisement().await?;
 
         let mut maintenance = time::interval(MAINTENANCE_INTERVAL);
         let mut hello_timer = time::interval(HELLO_INTERVAL);
+        let mut advertisement_timer = time::interval(Duration::from_secs(
+            DISCOVERY_ADVERTISEMENT_INTERVAL_SECONDS,
+        ));
         let mut receive_buffer = vec![0u8; MAX_DATAGRAM_SIZE];
 
         loop {
@@ -100,6 +101,10 @@ impl NodeEventLoop {
 
                 _ = hello_timer.tick() => {
                     self.broadcast_hello().await?;
+                }
+
+                _ = advertisement_timer.tick() => {
+                    self.broadcast_advertisement().await?;
                 }
 
                 _ = maintenance.tick() => {
@@ -121,6 +126,37 @@ impl NodeEventLoop {
         for peer in &self.advertised_peers {
             self.transport
                 .send_to(&frame, *peer)
+                .await
+                .map_err(NodeLoopError::Transport)?;
+        }
+        Ok(())
+    }
+
+    async fn broadcast_advertisement(&mut self) -> Result<(), NodeLoopError> {
+        let node_id = NodeId::from_device(self.state.device());
+        let advertisement = self
+            .state
+            .formation
+            .create_advertisement(node_id, unix_timestamp())
+            .map_err(NodeLoopError::Discovery)?;
+        let frame = DiscoveryControl::Advertisement(advertisement).encode();
+
+        for peer in &self.advertised_peers {
+            self.transport
+                .send_to(&frame, *peer)
+                .await
+                .map_err(NodeLoopError::Transport)?;
+        }
+
+        let targets: Vec<_> = self
+            .state
+            .runtime_peers()
+            .filter_map(|(_, peer)| (peer.address != SocketAddr::from(([0, 0, 0, 0], 0))).then_some(peer.address))
+            .take(DISCOVERY_GOSSIP_FANOUT)
+            .collect();
+        for target in targets {
+            self.transport
+                .send_to(&frame, target)
                 .await
                 .map_err(NodeLoopError::Transport)?;
         }
@@ -164,6 +200,9 @@ impl NodeEventLoop {
         match control {
             DiscoveryControl::Hello(hello) => self.handle_hello(hello, source).await?,
             DiscoveryControl::HelloAck(ack) => self.handle_hello_ack(ack, source).await?,
+            DiscoveryControl::Advertisement(advertisement) => {
+                self.handle_advertisement(advertisement, source).await?
+            }
         }
         Ok(())
     }
@@ -178,12 +217,6 @@ impl NodeEventLoop {
         self.state
             .remember_peer(RuntimePeer::new(node_id, source, now));
         self.state.mark_peer_hello(node_id, now);
-        let discovery_node_id = NodeId::from_bytes(hello.node_id);
-        let device_id = crate::identity::device::DeviceId::from_bytes(hello.device_id);
-        self.state
-            .formation
-            .observe_peer(discovery_node_id, device_id, unix_timestamp())
-            .map_err(NodeLoopError::Discovery)?;
         let ack = HelloAck {
             node_id: NodeId::from_device(self.state.device()),
             timestamp: unix_timestamp(),
@@ -206,8 +239,53 @@ impl NodeEventLoop {
             })
             .await
             .map_err(|_| NodeLoopError::EventChannelClosed)?;
-        self.emit_formation_if_changed().await?;
+        self.send_advertisement_to(source).await?;
         Ok(())
+    }
+
+    async fn handle_advertisement(
+        &mut self,
+        advertisement: crate::discovery::SignedDiscoveryAdvertisement,
+        source: SocketAddr,
+    ) -> Result<(), NodeLoopError> {
+        let accepted = self
+            .state
+            .formation
+            .accept_advertisement(&advertisement, unix_timestamp())
+            .map_err(NodeLoopError::Discovery)?;
+        if !accepted {
+            return Ok(());
+        }
+        self.emit_formation_if_changed().await?;
+        let frame = DiscoveryControl::Advertisement(advertisement).encode();
+        let targets: Vec<_> = self
+            .state
+            .runtime_peers()
+            .filter_map(|(_, peer)| {
+                (peer.address != source).then_some(peer.address)
+            })
+            .take(DISCOVERY_GOSSIP_FANOUT)
+            .collect();
+        for target in targets {
+            self.transport
+                .send_to(&frame, target)
+                .await
+                .map_err(NodeLoopError::Transport)?;
+        }
+        Ok(())
+    }
+
+    async fn send_advertisement_to(&mut self, target: SocketAddr) -> Result<(), NodeLoopError> {
+        let node_id = NodeId::from_device(self.state.device());
+        let advertisement = self
+            .state
+            .formation
+            .create_advertisement(node_id, unix_timestamp())
+            .map_err(NodeLoopError::Discovery)?;
+        self.transport
+            .send_to(&DiscoveryControl::Advertisement(advertisement).encode(), target)
+            .await
+            .map_err(NodeLoopError::Transport)
     }
 
     async fn handle_hello_ack(
@@ -225,6 +303,7 @@ impl NodeEventLoop {
         let expired = self.state.peer_table.expire(now, PEER_TIMEOUT);
         for node_id in expired {
             self.state.mark_peer_expired(node_id);
+            let _ = self.state.formation.forget_peer(node_id);
             self.events
                 .send(NodeEvent::PeerExpired { node_id })
                 .await
