@@ -58,6 +58,25 @@ impl PhysicalRuntime {
         Ok(())
     }
 
+    /// Discover kernel-visible Linux interfaces and attach raw packet drivers
+    /// for transports that use an Ethernet-compatible data path. Wi-Fi remains
+    /// visible to the registry but can use a future nl80211/802.11-specific driver.
+    #[cfg(target_os = "linux")]
+    pub fn discover_linux(&mut self, mtu_limit: usize) -> Result<usize, PhysicalError> {
+        let underlay = super::linux_underlay::LinuxUnderlay::new();
+        let interfaces = underlay.discover()?;
+        for interface in interfaces {
+            if interface.transport == PhysicalTransport::Ethernet {
+                let driver = super::linux_ethernet::LinuxEthernetDriver::open(
+                    &interface.name,
+                    mtu_limit.min(interface.mtu),
+                )?;
+                self.register_driver(Box::new(driver))?;
+            }
+        }
+        self.discover()
+    }
+
     pub fn discover(&mut self) -> Result<usize, PhysicalError> {
         let mut discovered = Vec::new();
         for binding in &self.drivers {
