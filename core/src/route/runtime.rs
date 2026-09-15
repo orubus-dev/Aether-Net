@@ -1,7 +1,7 @@
 use super::control_protocol::{decode_advertisement, encode_advertisement};
 use super::{
-    RouteNeighbor, RoutingControlError, RoutingControlPlane, RoutingPeer, SignedRouteAdvertisement,
-    ROUTING_ADVERTISEMENT_MAGIC,
+    ROUTING_ADVERTISEMENT_MAGIC, RouteNeighbor, RoutingControlError, RoutingControlPlane,
+    RoutingPeer, SignedRouteAdvertisement,
 };
 use crate::identity::fingerprint::Fingerprint;
 use crate::link::LinkSession;
@@ -158,7 +158,8 @@ impl RoutingRuntime {
     pub fn remove_peer(&mut self, node_id: NodeId) -> bool {
         let removed = self.control.remove_peer(node_id);
         if removed {
-            self.local_neighbors.retain(|neighbor| neighbor.node_id != node_id);
+            self.local_neighbors
+                .retain(|neighbor| neighbor.node_id != node_id);
         }
         removed
     }
@@ -185,13 +186,9 @@ impl RoutingRuntime {
             let flow = route_flow_id(self.local_address(), peer.address);
             self.native
                 .open_flow(peer.address, flow, AetherTransportMode::Datagram)?;
-            let frame = self.native.send_l4(
-                peer.address,
-                flow,
-                payload.clone(),
-                now_ms,
-                now_seconds,
-            )?;
+            let frame =
+                self.native
+                    .send_l4(peer.address, flow, payload.clone(), now_ms, now_seconds)?;
             output.push(RoutingOutboundFrame {
                 destination: peer.node_id,
                 address: peer.address,
@@ -387,6 +384,12 @@ mod tests {
             .unwrap();
         assert_eq!(accepted, 1);
         assert!(flooded.is_empty());
-        assert!(runtime_b.native().l3().lookup_route(address(1), 10).is_some());
+        assert!(
+            runtime_b
+                .native()
+                .l3()
+                .lookup_route(address(1), 10)
+                .is_some()
+        );
     }
 }
