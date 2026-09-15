@@ -14,17 +14,14 @@ pub const NAME_HASH_LENGTH: usize = 32;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResourceId([u8; RESOURCE_ID_LENGTH]);
 impl ResourceId {
-    pub const fn from_bytes(bytes: [u8; RESOURCE_ID_LENGTH]) -> Self {
-        Self(bytes)
-    }
-    pub const fn as_bytes(&self) -> &[u8; RESOURCE_ID_LENGTH] {
-        &self.0
-    }
+    pub const fn from_bytes(bytes: [u8; RESOURCE_ID_LENGTH]) -> Self { Self(bytes) }
+    pub const fn as_bytes(&self) -> &[u8; RESOURCE_ID_LENGTH] { &self.0 }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NameHash([u8; NAME_HASH_LENGTH]);
 impl NameHash {
+    pub const fn from_bytes(bytes: [u8; NAME_HASH_LENGTH]) -> Self { Self(bytes) }
     pub fn of(canonical_name: &str) -> Self {
         let mut h = Sha256::new();
         h.update(b"aether:name:v1:");
@@ -34,9 +31,7 @@ impl NameHash {
         b.copy_from_slice(&d);
         Self(b)
     }
-    pub const fn as_bytes(&self) -> &[u8; NAME_HASH_LENGTH] {
-        &self.0
-    }
+    pub const fn as_bytes(&self) -> &[u8; NAME_HASH_LENGTH] { &self.0 }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,20 +51,12 @@ pub enum NameError {
 
 pub fn canonicalize_name(name: &str) -> Result<String, NameError> {
     let trimmed = name.trim().trim_end_matches('.');
-    if trimmed.is_empty() {
-        return Err(NameError::Empty);
-    }
-    if trimmed.len() > NAME_MAX_LEN {
-        return Err(NameError::TooLong);
-    }
+    if trimmed.is_empty() { return Err(NameError::Empty); }
+    if trimmed.len() > NAME_MAX_LEN { return Err(NameError::TooLong); }
     let lower = trimmed.to_ascii_lowercase();
     for label in lower.split('.') {
-        if label.is_empty() || label.len() > LABEL_MAX_LEN {
-            return Err(NameError::InvalidLabel);
-        }
-        if label.starts_with('-') || label.ends_with('-') {
-            return Err(NameError::InvalidLabel);
-        }
+        if label.is_empty() || label.len() > LABEL_MAX_LEN { return Err(NameError::InvalidLabel); }
+        if label.starts_with('-') || label.ends_with('-') { return Err(NameError::InvalidLabel); }
         for b in label.bytes() {
             if !(b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_') {
                 return Err(NameError::InvalidCharacter);
@@ -99,21 +86,16 @@ impl NameRecord {
         expires_at: u64,
     ) -> Result<(String, Self), NameError> {
         let canonical = canonicalize_name(name)?;
-        if expires_at <= issued_at {
-            return Err(NameError::InvalidRecord);
-        };
-        Ok((
-            canonical.clone(),
-            Self {
-                name_hash: NameHash::of(&canonical),
-                resource_id,
-                owner_public_key,
-                version,
-                issued_at,
-                expires_at,
-                signature: [0; 64],
-            },
-        ))
+        if expires_at <= issued_at { return Err(NameError::InvalidRecord); }
+        Ok((canonical.clone(), Self {
+            name_hash: NameHash::of(&canonical),
+            resource_id,
+            owner_public_key,
+            version,
+            issued_at,
+            expires_at,
+            signature: [0; 64],
+        }))
     }
     pub fn signing_bytes(&self) -> Vec<u8> {
         let mut b = Vec::with_capacity(120);
@@ -126,22 +108,15 @@ impl NameRecord {
         b
     }
     pub fn verify(&self, now: u64) -> Result<(), NameError> {
-        if self.expires_at <= self.issued_at || now >= self.expires_at {
-            return Err(NameError::Expired);
-        };
-        let key = VerifyingKey::from_bytes(&self.owner_public_key)
-            .map_err(|_| NameError::InvalidSignature)?;
-        if !verify_bytes(&key, &self.signing_bytes(), &self.signature) {
-            return Err(NameError::InvalidSignature);
-        };
+        if self.expires_at <= self.issued_at || now >= self.expires_at { return Err(NameError::Expired); }
+        let key = VerifyingKey::from_bytes(&self.owner_public_key).map_err(|_| NameError::InvalidSignature)?;
+        if !verify_bytes(&key, &self.signing_bytes(), &self.signature) { return Err(NameError::InvalidSignature); }
         Ok(())
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SignedNameUpdate {
-    pub record: NameRecord,
-}
+pub struct SignedNameUpdate { pub record: NameRecord }
 
 pub struct NamingEngine {
     max_records: usize,
@@ -150,69 +125,36 @@ pub struct NamingEngine {
     cache: Vec<(NameHash, ResourceId, u64, u64)>,
 }
 impl NamingEngine {
-    pub fn new() -> Self {
-        Self::with_limits(DEFAULT_MAX_RECORDS, DEFAULT_MAX_CACHE_ENTRIES)
-    }
+    pub fn new() -> Self { Self::with_limits(DEFAULT_MAX_RECORDS, DEFAULT_MAX_CACHE_ENTRIES) }
     pub fn with_limits(max_records: usize, max_cache_entries: usize) -> Self {
-        Self {
-            max_records: max_records.max(1),
-            max_cache_entries: max_cache_entries.max(1),
-            records: Vec::new(),
-            cache: Vec::new(),
-        }
+        Self { max_records: max_records.max(1), max_cache_entries: max_cache_entries.max(1), records: Vec::new(), cache: Vec::new() }
     }
-    pub fn record_count(&self) -> usize {
-        self.records.len()
-    }
-    pub fn cache_count(&self) -> usize {
-        self.cache.len()
-    }
+    pub fn record_count(&self) -> usize { self.records.len() }
+    pub fn cache_count(&self) -> usize { self.cache.len() }
+    pub fn records(&self) -> impl Iterator<Item = &NameRecord> { self.records.iter() }
+    pub fn get(&self, hash: NameHash) -> Option<NameRecord> { self.records.iter().find(|r| r.name_hash == hash).copied() }
     pub fn publish(&mut self, record: NameRecord, now: u64) -> Result<bool, NameError> {
         record.verify(now)?;
-        if let Some(existing) = self
-            .records
-            .iter_mut()
-            .find(|r| r.name_hash == record.name_hash)
-        {
-            if record.version < existing.version {
-                return Ok(false);
-            };
+        if let Some(existing) = self.records.iter_mut().find(|r| r.name_hash == record.name_hash) {
+            if record.version < existing.version { return Ok(false); }
             *existing = record;
             return Ok(true);
-        };
-        if self.records.len() >= self.max_records {
-            return Err(NameError::RecordCapacity);
-        };
+        }
+        if self.records.len() >= self.max_records { return Err(NameError::RecordCapacity); }
         self.records.push(record);
         Ok(true)
     }
     pub fn resolve(&mut self, name: &str, now: u64) -> Result<ResourceId, NameError> {
         let canonical = canonicalize_name(name)?;
         let key = NameHash::of(&canonical);
-        if let Some((_, resource, version, expiry)) = self
-            .cache
-            .iter()
-            .find(|(h, _, _, e)| *h == key && now < *e)
-            .copied()
-        {
-            if self
-                .records
-                .iter()
-                .any(|r| r.name_hash == key && r.version == version && now < r.expires_at)
-            {
+        if let Some((_, resource, version, expiry)) = self.cache.iter().find(|(h, _, _, e)| *h == key && now < *e).copied() {
+            if self.records.iter().any(|r| r.name_hash == key && r.version == version && now < r.expires_at) {
                 self.refresh_cache(key, resource, version, expiry)?;
                 return Ok(resource);
             }
         }
-        let record = self
-            .records
-            .iter()
-            .find(|r| r.name_hash == key)
-            .copied()
-            .ok_or(NameError::NotFound)?;
-        if now >= record.expires_at {
-            return Err(NameError::Stale);
-        };
+        let record = self.records.iter().find(|r| r.name_hash == key).copied().ok_or(NameError::NotFound)?;
+        if now >= record.expires_at { return Err(NameError::Stale); }
         record.verify(now)?;
         self.refresh_cache(key, record.resource_id, record.version, record.expires_at)?;
         Ok(record.resource_id)
@@ -231,55 +173,30 @@ impl NamingEngine {
         let after = self.records.len() + self.cache.len();
         before.saturating_sub(after)
     }
-    fn refresh_cache(
-        &mut self,
-        key: NameHash,
-        resource: ResourceId,
-        version: u64,
-        expires_at: u64,
-    ) -> Result<(), NameError> {
-        if let Some(existing) = self.cache.iter_mut().find(|e| e.0 == key) {
-            *existing = (key, resource, version, expires_at);
-            return Ok(());
-        }
-        if self.cache.len() >= self.max_cache_entries {
-            return Err(NameError::CacheCapacity);
-        }
+    fn refresh_cache(&mut self, key: NameHash, resource: ResourceId, version: u64, expires_at: u64) -> Result<(), NameError> {
+        if let Some(existing) = self.cache.iter_mut().find(|e| e.0 == key) { *existing = (key, resource, version, expires_at); return Ok(()); }
+        if self.cache.len() >= self.max_cache_entries { return Err(NameError::CacheCapacity); }
         self.cache.push((key, resource, version, expires_at));
         Ok(())
     }
 }
-impl Default for NamingEngine {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+impl Default for NamingEngine { fn default() -> Self { Self::new() } }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::identity::device::DeviceSigningKey;
-    use ed25519_dalek::Signer;
-    fn resource(seed: u8) -> ResourceId {
-        ResourceId::from_bytes([seed; 32])
-    }
+    fn resource(seed: u8) -> ResourceId { ResourceId::from_bytes([seed; 32]) }
     #[test]
     fn canonicalization_is_stable() {
-        assert_eq!(
-            canonicalize_name(" School.AEETHER. ").unwrap(),
-            "school.aeether"
-        );
-        assert_eq!(
-            NameHash::of("school.aeether"),
-            NameHash::of("school.aeether")
-        );
+        assert_eq!(canonicalize_name(" School.AEETHER. ").unwrap(), "school.aeether");
+        assert_eq!(NameHash::of("school.aeether"), NameHash::of("school.aeether"));
     }
     #[test]
     fn signed_record_verifies_and_resolves() {
         let key = DeviceSigningKey::generate().unwrap();
         let public = key.verifying_key().to_bytes();
-        let (canonical, mut record) =
-            NameRecord::unsigned("Example.Aether", resource(7), public, 1, 10, 100).unwrap();
+        let (canonical, mut record) = NameRecord::unsigned("Example.Aether", resource(7), public, 1, 10, 100).unwrap();
         assert_eq!(canonical, "example.aether");
         record.signature = key.sign(&record.signing_bytes()).to_bytes();
         assert!(record.verify(20).is_ok());
@@ -292,11 +209,9 @@ mod tests {
     fn stale_versions_cannot_replace_newer_record() {
         let key = DeviceSigningKey::generate().unwrap();
         let public = key.verifying_key().to_bytes();
-        let (_, mut newer) =
-            NameRecord::unsigned("service.aether", resource(9), public, 2, 0, 100).unwrap();
+        let (_, mut newer) = NameRecord::unsigned("service.aether", resource(9), public, 2, 0, 100).unwrap();
         newer.signature = key.sign(&newer.signing_bytes()).to_bytes();
-        let (_, mut older) =
-            NameRecord::unsigned("service.aether", resource(8), public, 1, 0, 100).unwrap();
+        let (_, mut older) = NameRecord::unsigned("service.aether", resource(8), public, 1, 0, 100).unwrap();
         older.signature = key.sign(&older.signing_bytes()).to_bytes();
         let mut engine = NamingEngine::new();
         assert!(engine.publish(newer, 10).unwrap());
@@ -307,16 +222,17 @@ mod tests {
     fn expired_records_are_removed() {
         let key = DeviceSigningKey::generate().unwrap();
         let public = key.verifying_key().to_bytes();
-        let (_, mut record) =
-            NameRecord::unsigned("old.aether", resource(1), public, 1, 0, 10).unwrap();
+        let (_, mut record) = NameRecord::unsigned("old.aether", resource(1), public, 1, 0, 10).unwrap();
         record.signature = key.sign(&record.signing_bytes()).to_bytes();
         let mut engine = NamingEngine::new();
         engine.publish(record, 1).unwrap();
         assert_eq!(engine.expire(10), 1);
-        assert_eq!(
-            engine.resolve("old.aether", 10).unwrap_err(),
-            NameError::NotFound
-        );
+        assert_eq!(engine.resolve("old.aether", 10).unwrap_err(), NameError::NotFound);
+    }
+    #[test]
+    fn hash_bytes_round_trip() {
+        let hash = NameHash::of("example.aether");
+        assert_eq!(NameHash::from_bytes(*hash.as_bytes()), hash);
     }
     #[test]
     fn cache_capacity_is_bounded() {
