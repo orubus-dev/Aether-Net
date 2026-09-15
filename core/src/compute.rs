@@ -40,3 +40,17 @@ impl DistributedCompute {
 }
 impl Default for DistributedCompute{fn default()->Self{Self::new()}}
 fn node_score(n:&ComputeNode)->u64{let capacity=n.available.cpu_millis as u64+n.available.memory_bytes/1_048_576+n.available.storage_bytes/1_073_741_824+n.available.bandwidth_bps/1_000_000;capacity.saturating_add(n.reliability_ppm as u64).saturating_sub(n.cost_micros.min(1_000_000))}
+
+#[cfg(test)]
+mod tests{
+use super::*;
+fn node(x:u8)->NodeId{NodeId::from_bytes([x;32])}
+fn service(x:u8)->ServiceId{ServiceId([x;16])}
+fn cap()->ComputeCapacity{ComputeCapacity{cpu_millis:1000,memory_bytes:1024*1024*1024,storage_bytes:10*1024*1024*1024,bandwidth_bps:10_000_000}}
+fn n(x:u8)->ComputeNode{ComputeNode{node_id:node(x),capacity:cap(),available:cap(),reliability_ppm:990_000,cost_micros:x as u64,expires_at:100}}
+fn w()->Workload{Workload{id:WorkloadId::derive(node(9),1),owner:node(9),spec:WorkloadSpec{service:service(1),requirements:ComputeCapacity{cpu_millis:100,memory_bytes:128*1024*1024,storage_bytes:1024,bandwidth_bps:1_000_000},replicas:2,migratable:true,priority:1},version:1,expires_at:100}}
+#[test]fn places_requested_replicas(){let mut c=DistributedCompute::with_limits(4,4,8);c.register_node(n(1),1).unwrap();c.register_node(n(2),1).unwrap();c.register_node(n(3),1).unwrap();let id=w().id;c.submit(w(),1).unwrap();assert_eq!(c.place(id,1).unwrap().len(),2);assert_eq!(c.placements(id).count(),2)}
+#[test]fn rejects_insufficient_capacity(){let mut c=DistributedCompute::new();c.register_node(n(1),1).unwrap();let mut work=w();work.spec.requirements.cpu_millis=2000;c.submit(work,1).unwrap();assert_eq!(c.place(work.id,1),Err(ComputeError::NoPlacement));}
+#[test]fn versioned_workload_rejects_older_update(){let mut c=DistributedCompute::new();let mut a=w();a.version=4;let mut b=w();b.version=3;c.submit(a,1).unwrap();assert!(!c.submit(b,1).unwrap());}
+#[test]fn migration_requires_policy(){let mut c=DistributedCompute::new();c.register_node(n(1),1).unwrap();c.register_node(n(2),1).unwrap();let mut work=w();work.spec.replicas=1;work.spec.migratable=false;c.submit(work,1).unwrap();c.place(work.id,1).unwrap();assert_eq!(c.migrate(work.id,node(1),node(2),1),Err(ComputeError::MigrationNotAllowed));}
+}
