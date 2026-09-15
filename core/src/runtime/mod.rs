@@ -5,12 +5,14 @@ pub mod events;
 pub mod forwarding;
 pub mod health;
 pub mod metrics;
+pub mod native_plane;
 pub mod node;
 pub mod peers;
 
 pub use config::CoreConfig;
 
 pub use data_plane::{DataPlaneError, EncryptedDataPlane};
+pub use native_plane::{NativeAetherDataPlane, NativeDataPlaneError};
 
 pub use discovery::{
     AuthMessageError, ControlError, DiscoveryControl, DiscoveryHello, DiscoveryMessageType,
