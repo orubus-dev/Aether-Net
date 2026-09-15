@@ -9,6 +9,7 @@ pub mod link;
 pub mod mesh;
 pub mod name_resolution;
 pub mod naming;
+pub mod naming_protocol;
 pub mod network;
 pub mod operative;
 pub mod operative_os;
@@ -21,46 +22,18 @@ pub mod services;
 pub mod storage;
 pub mod transport;
 
-pub use compute::{
-    ComputeCapacity, ComputeError, ComputeNode, DistributedCompute, Placement, Workload,
-    WorkloadId, WorkloadSpec,
-};
-pub use connect::{
-    AetherConnect, ConnectError, ConversationId, Group, MediaKind, MessageEnvelope, OfflineMessage,
-    Presence,
-};
+pub use compute::{ComputeCapacity, ComputeError, ComputeNode, DistributedCompute, Placement, Workload, WorkloadId, WorkloadSpec};
+pub use connect::{AetherConnect, ConnectError, ConversationId, Group, MediaKind, MessageEnvelope, OfflineMessage, Presence};
 pub use core::{AetherCore, CoreState};
-pub use discovery::{
-    BootstrapPeer, DEFAULT_MAX_ADVERTISEMENT_ORIGINS, DiscoveryError, DiscoveryGossipError,
-    DiscoveryGossipState, DiscoveryKind, FormationState, NetworkFormationEngine, PeerRecord,
-    ResourceRecord, ServiceRecord, SignedDiscoveryAdvertisement,
-};
+pub use discovery::{BootstrapPeer, DEFAULT_MAX_ADVERTISEMENT_ORIGINS, DiscoveryError, DiscoveryGossipError, DiscoveryGossipState, DiscoveryKind, FormationState, NetworkFormationEngine, PeerRecord, ResourceRecord, ServiceRecord, SignedDiscoveryAdvertisement};
 pub use errors::CoreError;
-pub use gateway::{
-    GatewayDescriptor, GatewayDirection, GatewayDirectory, GatewayError, GatewayProtocol,
-};
-pub use name_resolution::{NameDelegation, NameResolutionEngine, ResolutionError, ResolutionKind};
-pub use naming::{
-    NameError, NameHash, NameRecord, NamingEngine, ResourceId, SignedNameUpdate, canonicalize_name,
-};
-pub use operative::{
-    AetherOperative, AetherPacketBudget, BandwidthGovernor, BandwidthLimits, DataPacket,
-    OperativeError, OperativeProfile, TransferDirection, TransferId, TransferState,
-};
-pub use operative_os::{
-    AetherNetOs, BootState, CapabilityLevel, HealthState, NodeResources, OperativeIdentity,
-    OperativeStatus, OsError,
-};
-pub use platform::{
-    HostPaths, HostPlatform, RestartPolicy, ServiceLifecycle, ServiceSpec, ServiceStatus,
-    ServiceSupervisor,
-};
+pub use gateway::{GatewayDescriptor, GatewayDirection, GatewayDirectory, GatewayError, GatewayProtocol};
+pub use name_resolution::{NameDelegation, NameResolutionEngine, ResolutionError, ResolutionKind, SignedNameDelegation};
+pub use naming::{NameError, NameHash, NameRecord, NamingEngine, ResourceId, SignedNameUpdate, canonicalize_name};
+pub use naming_protocol::{DelegationAnnouncement, NameAnnouncement, NameControl, NameQuery, NameResponse, NamingCodecError, NAMING_MAGIC, NAMING_VERSION};
+pub use operative::{AetherOperative, AetherPacketBudget, BandwidthGovernor, BandwidthLimits, DataPacket, OperativeError, OperativeProfile, TransferDirection, TransferId, TransferState};
+pub use operative_os::{AetherNetOs, BootState, CapabilityLevel, HealthState, NodeResources, OperativeIdentity, OperativeStatus, OsError};
+pub use platform::{HostPaths, HostPlatform, RestartPolicy, ServiceLifecycle, ServiceSpec, ServiceStatus, ServiceSupervisor};
 pub use security::{PrivacyContext, PrivacyToken, ReplayWindow, SecurityPolicy, SecurityProfile};
-pub use services::{
-    BuildArtifact, DeploymentError, DeploymentPlan, SiteFile, prepare_upload, verify_artifact,
-};
-pub use storage::{
-    ChunkDigest, ChunkId, ChunkStore, ContentChunk, ContentId, ContentManifest, DistributedStorage,
-    ManifestStore, ProviderAdvertisement, ProviderDirectory, RepairPlan, StorageError, StoredChunk,
-    StoredManifest,
-};
+pub use services::{BuildArtifact, DeploymentError, DeploymentPlan, SiteFile, prepare_upload, verify_artifact};
+pub use storage::{ChunkDigest, ChunkId, ChunkStore, ContentChunk, ContentId, ContentManifest, DistributedStorage, ManifestStore, ProviderAdvertisement, ProviderDirectory, RepairPlan, StorageError, StoredChunk, StoredManifest};
