@@ -22,6 +22,8 @@ pub use distributed_fixed::{
 
 pub use engine::RouteEngine;
 pub use gateway::{GatewayAdvertisement, GatewayCapacity};
-pub use linux_kernel::{KernelInterfaceAnalytics, KernelInterfaceConfig, LinuxKernelError, LinuxKernelInterface};
+pub use linux_kernel::{
+    KernelInterfaceAnalytics, KernelInterfaceConfig, LinuxKernelError, LinuxKernelInterface,
+};
 pub use metric::RouteMetrics;
 pub use path::RoutePath;

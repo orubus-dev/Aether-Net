@@ -13,7 +13,9 @@ pub struct KernelInterfaceConfig {
 }
 
 impl Default for KernelInterfaceConfig {
-    fn default() -> Self { Self { mtu: 1500 } }
+    fn default() -> Self {
+        Self { mtu: 1500 }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -29,10 +31,18 @@ pub struct KernelInterfaceAnalytics {
 }
 
 impl KernelInterfaceAnalytics {
-    pub fn total_packets(self) -> u64 { self.rx_packets.saturating_add(self.tx_packets) }
-    pub fn total_bytes(self) -> u64 { self.rx_bytes.saturating_add(self.tx_bytes) }
-    pub fn total_drops(self) -> u64 { self.rx_dropped.saturating_add(self.tx_dropped) }
-    pub fn total_errors(self) -> u64 { self.rx_errors.saturating_add(self.tx_errors) }
+    pub fn total_packets(self) -> u64 {
+        self.rx_packets.saturating_add(self.tx_packets)
+    }
+    pub fn total_bytes(self) -> u64 {
+        self.rx_bytes.saturating_add(self.tx_bytes)
+    }
+    pub fn total_drops(self) -> u64 {
+        self.rx_dropped.saturating_add(self.tx_dropped)
+    }
+    pub fn total_errors(self) -> u64 {
+        self.rx_errors.saturating_add(self.tx_errors)
+    }
 }
 
 #[derive(Debug)]
@@ -44,7 +54,9 @@ pub enum LinuxKernelError {
 }
 
 impl From<io::Error> for LinuxKernelError {
-    fn from(value: io::Error) -> Self { Self::Io(value) }
+    fn from(value: io::Error) -> Self {
+        Self::Io(value)
+    }
 }
 
 /// Minimal Linux TAP boundary. Linux owns the interface lifecycle and standard counters;
@@ -70,8 +82,15 @@ impl LinuxKernelInterface {
                 .open("/dev/net/tun")?;
             let mut req = IfReq::new(name)?;
             req.flags = (libc::IFF_TAP | libc::IFF_NO_PI) as libc::c_short;
-            ioctl_checked(device.as_raw_fd(), libc::TUNSETIFF as libc::c_ulong, &mut req)?;
-            let mut interface = Self { name: name.to_owned(), device };
+            ioctl_checked(
+                device.as_raw_fd(),
+                libc::TUNSETIFF as libc::c_ulong,
+                &mut req,
+            )?;
+            let mut interface = Self {
+                name: name.to_owned(),
+                device,
+            };
             interface.set_mtu(config.mtu)?;
             interface.set_up(true)?;
             Ok(interface)
@@ -84,7 +103,9 @@ impl LinuxKernelInterface {
         }
     }
 
-    pub fn name(&self) -> &str { &self.name }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 
     #[cfg(target_os = "linux")]
     pub fn read_frame(&mut self, buffer: &mut [u8]) -> Result<usize, LinuxKernelError> {
@@ -112,7 +133,9 @@ impl LinuxKernelInterface {
     pub fn analytics(&self) -> Result<KernelInterfaceAnalytics, LinuxKernelError> {
         #[cfg(target_os = "linux")]
         {
-            let root = Path::new("/sys/class/net").join(&self.name).join("statistics");
+            let root = Path::new("/sys/class/net")
+                .join(&self.name)
+                .join("statistics");
             Ok(KernelInterfaceAnalytics {
                 rx_bytes: read_counter(root.join("rx_bytes"))?,
                 rx_packets: read_counter(root.join("rx_packets"))?,
@@ -126,7 +149,9 @@ impl LinuxKernelInterface {
         }
 
         #[cfg(not(target_os = "linux"))]
-        { Err(LinuxKernelError::Unsupported) }
+        {
+            Err(LinuxKernelError::Unsupported)
+        }
     }
 
     #[cfg(target_os = "linux")]
@@ -134,17 +159,32 @@ impl LinuxKernelInterface {
         use std::os::fd::AsRawFd;
         let mut req = IfReq::new(&self.name)?;
         req.mtu = mtu as libc::c_int;
-        ioctl_checked(self.device.as_raw_fd(), libc::SIOCSIFMTU as libc::c_ulong, &mut req)
+        ioctl_checked(
+            self.device.as_raw_fd(),
+            libc::SIOCSIFMTU as libc::c_ulong,
+            &mut req,
+        )
     }
 
     #[cfg(target_os = "linux")]
     fn set_up(&mut self, up: bool) -> Result<(), LinuxKernelError> {
         use std::os::fd::AsRawFd;
         let mut req = IfReq::new(&self.name)?;
-        ioctl_checked(self.device.as_raw_fd(), libc::SIOCGIFFLAGS as libc::c_ulong, &mut req)?;
-        if up { req.flags |= libc::IFF_UP as libc::c_short; }
-        else { req.flags &= !(libc::IFF_UP as libc::c_short); }
-        ioctl_checked(self.device.as_raw_fd(), libc::SIOCSIFFLAGS as libc::c_ulong, &mut req)
+        ioctl_checked(
+            self.device.as_raw_fd(),
+            libc::SIOCGIFFLAGS as libc::c_ulong,
+            &mut req,
+        )?;
+        if up {
+            req.flags |= libc::IFF_UP as libc::c_short;
+        } else {
+            req.flags &= !(libc::IFF_UP as libc::c_short);
+        }
+        ioctl_checked(
+            self.device.as_raw_fd(),
+            libc::SIOCSIFFLAGS as libc::c_ulong,
+            &mut req,
+        )
     }
 }
 
@@ -152,14 +192,20 @@ fn validate_name(name: &str) -> Result<(), LinuxKernelError> {
     if name.is_empty() || name.len() >= libc::IFNAMSIZ {
         return Err(LinuxKernelError::InvalidName);
     }
-    if name.as_bytes().iter().any(|byte| *byte == b'/' || *byte == 0) {
+    if name
+        .as_bytes()
+        .iter()
+        .any(|byte| *byte == b'/' || *byte == 0)
+    {
         return Err(LinuxKernelError::InvalidName);
     }
     Ok(())
 }
 
 fn validate_mtu(mtu: u32) -> Result<(), LinuxKernelError> {
-    if !(576..=65_535).contains(&mtu) { return Err(LinuxKernelError::InvalidMtu); }
+    if !(576..=65_535).contains(&mtu) {
+        return Err(LinuxKernelError::InvalidMtu);
+    }
     Ok(())
 }
 
@@ -175,7 +221,11 @@ struct IfReq {
 impl IfReq {
     fn new(name: &str) -> Result<Self, LinuxKernelError> {
         validate_name(name)?;
-        let mut value = Self { name: [0; libc::IFNAMSIZ], flags: 0, mtu: 0 };
+        let mut value = Self {
+            name: [0; libc::IFNAMSIZ],
+            flags: 0,
+            mtu: 0,
+        };
         for (index, byte) in name.as_bytes().iter().enumerate() {
             value.name[index] = *byte as libc::c_char;
         }
@@ -190,14 +240,22 @@ fn ioctl_checked(
     req: &mut IfReq,
 ) -> Result<(), LinuxKernelError> {
     let result = unsafe { libc::ioctl(fd, request, req as *mut IfReq) };
-    if result < 0 { Err(io::Error::last_os_error().into()) } else { Ok(()) }
+    if result < 0 {
+        Err(io::Error::last_os_error().into())
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(target_os = "linux")]
 fn read_counter(path: impl AsRef<Path>) -> Result<u64, LinuxKernelError> {
     let text = std::fs::read_to_string(path)?;
     text.trim().parse::<u64>().map_err(|_| {
-        io::Error::new(io::ErrorKind::InvalidData, "invalid Linux interface counter").into()
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "invalid Linux interface counter",
+        )
+        .into()
     })
 }
 
@@ -206,13 +264,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_config_is_conventional() { assert_eq!(KernelInterfaceConfig::default().mtu, 1500); }
+    fn default_config_is_conventional() {
+        assert_eq!(KernelInterfaceConfig::default().mtu, 1500);
+    }
 
     #[test]
     fn analytics_aggregate_without_overflow() {
         let analytics = KernelInterfaceAnalytics {
-            rx_bytes: u64::MAX, tx_bytes: 1, rx_packets: 4, tx_packets: 5,
-            rx_dropped: 2, tx_dropped: 3, rx_errors: 1, tx_errors: 2,
+            rx_bytes: u64::MAX,
+            tx_bytes: 1,
+            rx_packets: 4,
+            tx_packets: 5,
+            rx_dropped: 2,
+            tx_dropped: 3,
+            rx_errors: 1,
+            tx_errors: 2,
         };
         assert_eq!(analytics.total_bytes(), u64::MAX);
         assert_eq!(analytics.total_packets(), 9);
@@ -223,8 +289,14 @@ mod tests {
     #[test]
     fn validates_interface_names_and_mtu() {
         assert!(validate_name("aether0").is_ok());
-        assert!(matches!(validate_name(""), Err(LinuxKernelError::InvalidName)));
-        assert!(matches!(validate_mtu(100), Err(LinuxKernelError::InvalidMtu)));
+        assert!(matches!(
+            validate_name(""),
+            Err(LinuxKernelError::InvalidName)
+        ));
+        assert!(matches!(
+            validate_mtu(100),
+            Err(LinuxKernelError::InvalidMtu)
+        ));
         assert!(validate_mtu(1500).is_ok());
     }
 }
