@@ -15,4 +15,5 @@ pub enum PhysicalError {
     HardwareFailure,
     DiscoveryFailed,
     ConnectionFailed,
+    CapacityExceeded,
 }
