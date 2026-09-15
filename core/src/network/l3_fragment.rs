@@ -1,4 +1,5 @@
-use super::{AetherFlowId, AetherL3Packet, L3Error, L3Flags, MAX_L3_PAYLOAD};
+use super::l3::MAX_L3_PAYLOAD;
+use super::{AetherFlowId, AetherL3Packet, L3Flags};
 
 const FRAGMENT_META_LEN: usize = 4;
 pub const DEFAULT_MAX_REASSEMBLIES: usize = 1024;
