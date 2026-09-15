@@ -51,8 +51,8 @@ impl PhysicalRuntime {
 
     pub fn transmit(&mut self, link_id: PhysicalLinkId, frame: &[u8]) -> Result<(), PhysicalError> {
         let link = self.engine.links().iter().find(|link| link.id == link_id && link.active).copied().ok_or(PhysicalError::ConnectionFailed)?;
-        if frame.len() > self.engine.mtu_for(link.transport) { return Err(PhysicalError::FrameTooLarge); }
         let driver = self.drivers.iter_mut().find(|binding| binding.transport == link.transport).ok_or(PhysicalError::Unavailable)?;
+        if frame.len() > driver.driver.mtu() { return Err(PhysicalError::FrameTooLarge); }
         driver.driver.transmit(link_id, frame)
     }
 
