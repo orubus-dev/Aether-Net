@@ -27,9 +27,15 @@
 - [x] Multi-hop route selection and expiry-driven repair conformance tests.
 - [ ] Carry signed routing advertisements through the live native L4/runtime dissemination path.
 
-## Phase 5 - Physical Underlay Engine [IMPLEMENTED - PLATFORM INTEGRATION PENDING]
+## Phase 5 - Physical Underlay Engine [DRIVER RUNTIME IMPLEMENTED - HARDWARE INTEGRATION PENDING]
 - [x] Carrier-neutral adapter model, capabilities, bounded registries, discovery, selection and MTU validation.
-- [ ] OS drivers, live L1/L2 transmission, hardware interoperability and physical metrics feeding routing.
+- [x] PhysicalDriver abstraction with transmit/poll operations.
+- [x] PhysicalRuntime manager feeding live driver discovery into the underlay link table.
+- [x] Bounded loopback carrier for integration testing and emulation.
+- [x] Frame-size, carrier-state and receive-queue capacity enforcement.
+- [ ] OS-specific Ethernet/Wi-Fi/Wi-Fi Direct/BLE/UWB drivers.
+- [ ] Native L1/L2 peer discovery over real radios and wired interfaces.
+- [ ] Physical telemetry feeding live route metrics.
 
 ## Phase 6 - Network Formation & Discovery [IMPLEMENTED - RUNTIME INTEGRATION PENDING]
 - [x] Bootstrap, formation state machine, bounded peer/service/resource discovery, versions, TTLs and partition generations.
