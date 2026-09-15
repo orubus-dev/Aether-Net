@@ -1,6 +1,6 @@
 use super::capabilities::{PhysicalCapabilities, PhysicalTransport};
-use super::engine::UnderlayProperties;
-use super::interface::{PhysicalAdapter, PhysicalAdapterExt, PhysicalError};
+use super::engine::{PhysicalAdapterExt, UnderlayProperties};
+use super::interface::{PhysicalAdapter, PhysicalError};
 use super::link::{PhysicalLink, PhysicalLinkId};
 
 #[derive(Debug, Clone)]
