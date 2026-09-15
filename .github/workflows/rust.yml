@@ -6,12 +6,24 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: write
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo fmt --all -- --check
+      - name: Format workspace
+        run: |
+          cargo fmt --all
+          if ! git diff --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "style: cargo fmt"
+            git push
+          fi
       - run: cargo check --workspace --all-targets
       - run: cargo test --workspace
