@@ -118,11 +118,7 @@ pub fn decode_advertisement(
     }
     let message = SignedRouteAdvertisement {
         advertisement: super::RouteAdvertisement::with_expiry(
-            origin,
-            sequence,
-            issued_at,
-            expires_at,
-            neighbors,
+            origin, sequence, issued_at, expires_at, neighbors,
         ),
         public_key,
         signature,
@@ -186,9 +182,12 @@ mod tests {
     use crate::route::{RouteAdvertisement, RouteMetrics, RouteNeighbor};
     use ed25519_dalek::SigningKey;
 
-    fn key(seed: u8) -> SigningKey { SigningKey::from_bytes(&[seed; 32]) }
+    fn key(seed: u8) -> SigningKey {
+        SigningKey::from_bytes(&[seed; 32])
+    }
     fn node_id(key: &SigningKey) -> NodeId {
-        let fingerprint = Fingerprint::from_domain(b"aether/node-id/v1", &key.verifying_key().to_bytes());
+        let fingerprint =
+            Fingerprint::from_domain(b"aether/node-id/v1", &key.verifying_key().to_bytes());
         NodeId::from_bytes(*fingerprint.as_bytes())
     }
 
@@ -207,7 +206,9 @@ mod tests {
                     hop_count: 1,
                 },
             }]
-        } else { Vec::new() };
+        } else {
+            Vec::new()
+        };
         SignedRouteAdvertisement::sign(
             RouteAdvertisement::with_expiry(node_id(&key(1)), 7, 10, 70, neighbors),
             &key(1),
@@ -221,7 +222,10 @@ mod tests {
             let encoded = encode_advertisement(&message).unwrap();
             let decoded = decode_advertisement(&encoded).unwrap();
             assert_eq!(decoded.advertisement.origin, message.advertisement.origin);
-            assert_eq!(decoded.advertisement.sequence, message.advertisement.sequence);
+            assert_eq!(
+                decoded.advertisement.sequence,
+                message.advertisement.sequence
+            );
             assert_eq!(decoded.signature, message.signature);
             assert_eq!(encode_advertisement(&decoded).unwrap(), encoded);
         }
@@ -232,7 +236,10 @@ mod tests {
         let message = advertisement(true);
         let mut encoded = encode_advertisement(&message).unwrap();
         encoded.pop();
-        assert_eq!(decode_advertisement(&encoded), Err(RouteControlCodecError::InvalidLength));
+        assert_eq!(
+            decode_advertisement(&encoded),
+            Err(RouteControlCodecError::InvalidLength)
+        );
     }
 
     #[test]
@@ -241,6 +248,9 @@ mod tests {
         let mut encoded = encode_advertisement(&message).unwrap();
         let last = encoded.len() - 1;
         encoded[last] ^= 1;
-        assert_eq!(decode_advertisement(&encoded), Err(RouteControlCodecError::InvalidAdvertisement));
+        assert_eq!(
+            decode_advertisement(&encoded),
+            Err(RouteControlCodecError::InvalidAdvertisement)
+        );
     }
 }
