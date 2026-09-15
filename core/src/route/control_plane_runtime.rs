@@ -229,13 +229,6 @@ impl RoutingControlPlane {
         signed: SignedRouteAdvertisement,
         now: u64,
     ) -> Result<bool, RoutingControlError> {
-        let peer = self
-            .peers
-            .get(&signed.advertisement.origin)
-            .ok_or(RoutingControlError::PeerUnknown)?;
-        if peer.public_key != signed.public_key {
-            return Err(RoutingControlError::OriginKeyMismatch);
-        }
         if signed.advertisement.origin == self.local_node
             || !signed.advertisement.is_valid_at(now)
             || signed.advertisement.expires_at <= signed.advertisement.issued_at
@@ -243,17 +236,31 @@ impl RoutingControlPlane {
         {
             return Err(RoutingControlError::InvalidAdvertisement);
         }
-        if signed.advertisement.neighbors.iter().any(|neighbor| {
-            neighbor.node_id == signed.advertisement.origin
-                || neighbor.metrics.bandwidth_bps == 0
-                || neighbor.metrics.packet_loss_ppm > 1_000_000
-                || neighbor.metrics.reliability_ppm > 1_000_000
-                || neighbor.metrics.hop_count == 0
-        }) {
-            return Err(RoutingControlError::InvalidAdvertisement);
-        }
         if !signed.verify() {
             return Err(RoutingControlError::InvalidSignature);
+        }
+        let fingerprint = Fingerprint::from_domain(b"aether/node-id/v1", &signed.public_key);
+        if signed.advertisement.origin != NodeId::from_bytes(*fingerprint.as_bytes()) {
+            return Err(RoutingControlError::OriginKeyMismatch);
+        }
+        if let Some(peer) = self.peers.get(&signed.advertisement.origin) {
+            if peer.public_key != signed.public_key {
+                return Err(RoutingControlError::OriginKeyMismatch);
+            }
+        }
+        if signed
+            .advertisement
+            .neighbors
+            .iter()
+            .any(|neighbor| {
+                neighbor.node_id == signed.advertisement.origin
+                    || neighbor.metrics.bandwidth_bps == 0
+                    || neighbor.metrics.packet_loss_ppm > 1_000_000
+                    || neighbor.metrics.reliability_ppm > 1_000_000
+                    || neighbor.metrics.hop_count == 0
+            })
+        {
+            return Err(RoutingControlError::InvalidAdvertisement);
         }
         Ok(self
             .distributed
@@ -356,9 +363,9 @@ pub fn canonical_advertisement(ad: &RouteAdvertisement) -> Vec<u8> {
     );
     bytes.extend_from_slice(&ROUTING_ADVERTISEMENT_MAGIC);
     bytes.extend_from_slice(ad.origin.as_bytes());
-    bytes.extend_from_slice(&ad.sequence.to_le_bytes());
-    bytes.extend_from_slice(&ad.issued_at.to_le_bytes());
-    bytes.extend_from_slice(&ad.expires_at.to_le_bytes());
+    bytes.extend_from_slice(&ad.sequence.to_be_bytes());
+    bytes.extend_from_slice(&ad.issued_at.to_be_bytes());
+    bytes.extend_from_slice(&ad.expires_at.to_be_bytes());
     bytes.extend_from_slice(&(ad.neighbors.len() as u16).to_be_bytes());
     for neighbor in &ad.neighbors {
         bytes.extend_from_slice(neighbor.node_id.as_bytes());
@@ -393,6 +400,14 @@ mod tests {
         NodeId::from_bytes([seed; 32])
     }
 
+    fn node_for_key(signing_key: &SigningKey) -> NodeId {
+        let fingerprint = Fingerprint::from_domain(
+            b"aether/node-id/v1",
+            &signing_key.verifying_key().to_bytes(),
+        );
+        NodeId::from_bytes(*fingerprint.as_bytes())
+    }
+
     fn address(seed: u8) -> AetherAddress {
         AetherAddress::from_bytes([seed; 32])
     }
@@ -412,7 +427,7 @@ mod tests {
 
     fn peer(seed: u8, key: &SigningKey) -> RoutingPeer {
         RoutingPeer {
-            node_id: node(seed),
+            node_id: node_for_key(key),
             address: address(seed),
             public_key: key.verifying_key().to_bytes(),
         }
@@ -421,9 +436,10 @@ mod tests {
     #[test]
     fn signed_advertisement_is_authenticatable() {
         let signing_key = key(7);
+        let origin = node_for_key(&signing_key);
         let signed = SignedRouteAdvertisement::sign(
             RouteAdvertisement::with_expiry(
-                node(7),
+                origin,
                 1,
                 0,
                 100,
@@ -441,10 +457,11 @@ mod tests {
     fn forged_advertisement_is_rejected() {
         let trusted = key(2);
         let attacker = key(3);
+        let origin = node_for_key(&trusted);
         let mut plane = RoutingControlPlane::with_limits(node(1), address(1), 8, 8, 8);
         plane.register_peer(peer(2, &trusted)).unwrap();
         let forged = SignedRouteAdvertisement::sign(
-            RouteAdvertisement::with_expiry(node(2), 1, 0, 100, vec![]),
+            RouteAdvertisement::with_expiry(origin, 1, 0, 100, vec![]),
             &attacker,
         );
         assert_eq!(
@@ -467,17 +484,30 @@ mod tests {
 
     #[test]
     fn local_advertisement_requires_matching_signing_identity() {
-        let mut plane = RoutingControlPlane::with_limits(node(1), address(1), 8, 8, 8);
+        let local_key = key(1);
+        let local_node = node_for_key(&local_key);
+        let mut plane = RoutingControlPlane::with_limits(local_node, address(1), 8, 8, 8);
         let peer_key = key(2);
         plane.register_peer(peer(2, &peer_key)).unwrap();
-        let metrics = metrics(10);
-        assert_eq!(
+        assert!(
             plane
                 .local_advertisement(
                     0,
                     vec![RouteNeighbor {
-                        node_id: node(2),
-                        metrics,
+                        node_id: node_for_key(&peer_key),
+                        metrics: metrics(10),
+                    }],
+                    &local_key,
+                )
+                .is_ok()
+        );
+        assert_eq!(
+            plane
+                .local_advertisement(
+                    1,
+                    vec![RouteNeighbor {
+                        node_id: node_for_key(&peer_key),
+                        metrics: metrics(10),
                     }],
                     &key(9),
                 )
@@ -487,10 +517,14 @@ mod tests {
     }
 
     #[test]
-    fn authenticated_topology_syncs_to_l3_and_repairs_after_expiry() {
+    fn remote_origin_is_accepted_and_routes_recompute() {
+        let local_key = key(1);
         let b_key = key(2);
         let c_key = key(3);
-        let mut plane = RoutingControlPlane::with_limits(node(1), address(1), 8, 8, 8);
+        let local = node_for_key(&local_key);
+        let b = node_for_key(&b_key);
+        let c = node_for_key(&c_key);
+        let mut plane = RoutingControlPlane::with_limits(local, address(1), 8, 8, 8);
         plane.register_peer(peer(2, &b_key)).unwrap();
         plane.register_peer(peer(3, &c_key)).unwrap();
         plane
@@ -498,19 +532,19 @@ mod tests {
                 1,
                 0,
                 vec![RouteNeighbor {
-                    node_id: node(2),
+                    node_id: b,
                     metrics: metrics(10),
                 }],
             )
             .unwrap();
         let b_ad = SignedRouteAdvertisement::sign(
             RouteAdvertisement::with_expiry(
-                node(2),
+                b,
                 1,
                 0,
                 100,
                 vec![RouteNeighbor {
-                    node_id: node(3),
+                    node_id: c,
                     metrics: metrics(10),
                 }],
             ),
