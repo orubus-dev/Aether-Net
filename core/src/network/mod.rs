@@ -1,4 +1,6 @@
+pub mod address;
 pub mod capabilities;
+pub mod l3;
 pub mod node;
 pub mod packet;
 pub mod peer;
@@ -6,7 +8,11 @@ pub mod protocol;
 pub mod registry;
 pub mod service;
 
+pub use address::{AetherAddress, AETHER_ADDRESS_LENGTH};
+
 pub use capabilities::NodeCapabilities;
+
+pub use l3::{AetherFlowId, AetherL3Packet, L3Error, L3Flags, L3_HEADER_LENGTH, L3_MAGIC, L3_VERSION};
 
 pub use node::{NodeDescriptor, NodeId, NodeRole};
 
