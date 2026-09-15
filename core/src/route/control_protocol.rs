@@ -5,7 +5,7 @@ pub const ROUTE_CONTROL_MAGIC: [u8; 4] = *b"ARTE";
 pub const ROUTE_CONTROL_VERSION: u8 = 1;
 pub const ROUTE_CONTROL_ADVERTISEMENT: u8 = 1;
 pub const ROUTE_CONTROL_HEADER_LENGTH: usize = 8;
-pub const ROUTE_CONTROL_FIXED_BODY_LENGTH: usize = 32 + 8 + 8 + 8 + 2 + 32 + 64;
+pub const ROUTE_CONTROL_FIXED_BODY_LENGTH: usize = 32 + 8 + 8 + 8 + 32 + 64;
 pub const ROUTE_CONTROL_NEIGHBOR_LENGTH: usize = 32 + 8 + 8 + 4 + 8 + 4 + 8 + 4 + 2;
 pub const ROUTE_CONTROL_MAX_NEIGHBORS: usize = 256;
 pub const ROUTE_CONTROL_MAX_SIZE: usize = ROUTE_CONTROL_HEADER_LENGTH
@@ -29,10 +29,7 @@ pub fn encode_advertisement(
     if count > ROUTE_CONTROL_MAX_NEIGHBORS || count > u16::MAX as usize {
         return Err(RouteControlCodecError::TooManyNeighbors);
     }
-    if message.advertisement.expires_at <= message.advertisement.issued_at {
-        return Err(RouteControlCodecError::InvalidAdvertisement);
-    }
-    if !message.verify() {
+    if message.advertisement.expires_at <= message.advertisement.issued_at || !message.verify() {
         return Err(RouteControlCodecError::InvalidAdvertisement);
     }
 
@@ -84,11 +81,12 @@ pub fn decode_advertisement(
         return Err(RouteControlCodecError::UnsupportedMessage);
     }
     let count = u16::from_be_bytes([bytes[6], bytes[7]]) as usize;
-    if count > ROUTE_CONTROL_MAX_NEIGHBORS {
-        return Err(RouteControlCodecError::TooManyNeighbors);
-    }
-    if bytes.len() != expected_size(count) {
-        return Err(RouteControlCodecError::InvalidLength);
+    if count > ROUTE_CONTROL_MAX_NEIGHBORS || bytes.len() != expected_size(count) {
+        return if count > ROUTE_CONTROL_MAX_NEIGHBORS {
+            Err(RouteControlCodecError::TooManyNeighbors)
+        } else {
+            Err(RouteControlCodecError::InvalidLength)
+        };
     }
 
     let mut cursor = ROUTE_CONTROL_HEADER_LENGTH;
@@ -98,7 +96,6 @@ pub fn decode_advertisement(
     let expires_at = read_u64(bytes, &mut cursor)?;
     let mut public_key = [0u8; 32];
     read_fixed(bytes, &mut cursor, &mut public_key)?;
-
     let mut neighbors = Vec::with_capacity(count);
     for _ in 0..count {
         let node_id = read_node_id(bytes, &mut cursor)?;
@@ -114,16 +111,18 @@ pub fn decode_advertisement(
         };
         neighbors.push(super::RouteNeighbor { node_id, metrics });
     }
-
     let mut signature = [0u8; 64];
     read_fixed(bytes, &mut cursor, &mut signature)?;
     if cursor != bytes.len() || expires_at <= issued_at {
         return Err(RouteControlCodecError::InvalidAdvertisement);
     }
-
     let message = SignedRouteAdvertisement {
         advertisement: super::RouteAdvertisement::with_expiry(
-            origin, sequence, issued_at, expires_at, neighbors,
+            origin,
+            sequence,
+            issued_at,
+            expires_at,
+            neighbors,
         ),
         public_key,
         signature,
@@ -136,13 +135,8 @@ pub fn decode_advertisement(
 
 fn expected_size(neighbors: usize) -> usize {
     ROUTE_CONTROL_HEADER_LENGTH
-        + 32
-        + 8
-        + 8
-        + 8
-        + 32
+        + ROUTE_CONTROL_FIXED_BODY_LENGTH
         + ROUTE_CONTROL_NEIGHBOR_LENGTH * neighbors
-        + 64
 }
 
 fn read_fixed(
@@ -192,70 +186,61 @@ mod tests {
     use crate::route::{RouteAdvertisement, RouteMetrics, RouteNeighbor};
     use ed25519_dalek::SigningKey;
 
-    fn key(seed: u8) -> SigningKey {
-        SigningKey::from_bytes(&[seed; 32])
-    }
-
+    fn key(seed: u8) -> SigningKey { SigningKey::from_bytes(&[seed; 32]) }
     fn node_id(key: &SigningKey) -> NodeId {
-        let fingerprint =
-            Fingerprint::from_domain(b"aether/node-id/v1", &key.verifying_key().to_bytes());
+        let fingerprint = Fingerprint::from_domain(b"aether/node-id/v1", &key.verifying_key().to_bytes());
         NodeId::from_bytes(*fingerprint.as_bytes())
     }
 
-    fn advertisement() -> SignedRouteAdvertisement {
+    fn advertisement(with_neighbor: bool) -> SignedRouteAdvertisement {
+        let neighbors = if with_neighbor {
+            vec![RouteNeighbor {
+                node_id: NodeId::from_bytes([2; 32]),
+                metrics: RouteMetrics {
+                    latency_us: 10,
+                    jitter_us: 2,
+                    packet_loss_ppm: 100,
+                    bandwidth_bps: 10_000_000,
+                    reliability_ppm: 999_000,
+                    monetary_cost_micros: 4,
+                    energy_cost: 2,
+                    hop_count: 1,
+                },
+            }]
+        } else { Vec::new() };
         SignedRouteAdvertisement::sign(
-            RouteAdvertisement::with_expiry(
-                node_id(&key(1)),
-                7,
-                10,
-                70,
-                vec![RouteNeighbor {
-                    node_id: NodeId::from_bytes([2; 32]),
-                    metrics: RouteMetrics {
-                        latency_us: 10,
-                        jitter_us: 2,
-                        packet_loss_ppm: 100,
-                        bandwidth_bps: 10_000_000,
-                        reliability_ppm: 999_000,
-                        monetary_cost_micros: 4,
-                        energy_cost: 2,
-                        hop_count: 1,
-                    },
-                }],
-            ),
+            RouteAdvertisement::with_expiry(node_id(&key(1)), 7, 10, 70, neighbors),
             &key(1),
         )
     }
 
     #[test]
     fn advertisement_round_trip_is_deterministic() {
-        let message = advertisement();
-        let encoded = encode_advertisement(&message).unwrap();
-        let decoded = decode_advertisement(&encoded).unwrap();
-        assert_eq!(decoded, message);
-        assert_eq!(encode_advertisement(&decoded).unwrap(), encoded);
+        for with_neighbor in [false, true] {
+            let message = advertisement(with_neighbor);
+            let encoded = encode_advertisement(&message).unwrap();
+            let decoded = decode_advertisement(&encoded).unwrap();
+            assert_eq!(decoded.advertisement.origin, message.advertisement.origin);
+            assert_eq!(decoded.advertisement.sequence, message.advertisement.sequence);
+            assert_eq!(decoded.signature, message.signature);
+            assert_eq!(encode_advertisement(&decoded).unwrap(), encoded);
+        }
     }
 
     #[test]
     fn malformed_length_is_rejected_before_parsing() {
-        let message = advertisement();
+        let message = advertisement(true);
         let mut encoded = encode_advertisement(&message).unwrap();
         encoded.pop();
-        assert_eq!(
-            decode_advertisement(&encoded),
-            Err(RouteControlCodecError::InvalidLength)
-        );
+        assert_eq!(decode_advertisement(&encoded), Err(RouteControlCodecError::InvalidLength));
     }
 
     #[test]
     fn forged_signature_is_rejected() {
-        let message = advertisement();
+        let message = advertisement(true);
         let mut encoded = encode_advertisement(&message).unwrap();
         let last = encoded.len() - 1;
         encoded[last] ^= 1;
-        assert_eq!(
-            decode_advertisement(&encoded),
-            Err(RouteControlCodecError::InvalidAdvertisement)
-        );
+        assert_eq!(decode_advertisement(&encoded), Err(RouteControlCodecError::InvalidAdvertisement));
     }
 }
