@@ -6,7 +6,8 @@ pub mod hello;
 pub use auth::{AuthMessageError, PeerChallengeMessage, PeerResponseMessage};
 
 pub use control::{ControlError, DiscoveryControl, DiscoveryMessageType, HelloAck};
-
-pub use formation::{DEFAULT_DISCOVERY_GC_INTERVAL_SECONDS, DiscoveryFormation};
-
+pub use formation::{
+    DiscoveryFormation, DEFAULT_DISCOVERY_GC_INTERVAL_SECONDS,
+    DISCOVERY_ADVERTISEMENT_INTERVAL_SECONDS,
+};
 pub use hello::{DiscoveryHello, HelloError};
