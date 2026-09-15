@@ -1,8 +1,8 @@
 use crate::identity::{sign, verify_bytes};
 use crate::network::{AetherAddress, AetherL3Engine, L3Route, NodeId, TrafficPriority};
 use crate::route::{
-    DEFAULT_ROUTE_TTL_SECONDS, DistributedRoutingEngine, RouteAdvertisement, RouteMetrics,
-    RouteNeighbor, RoutingError, ROUTING_PUBLIC_KEY_LENGTH,
+    DEFAULT_ROUTE_TTL_SECONDS, DistributedRoutingEngine, ROUTING_PUBLIC_KEY_LENGTH,
+    RouteAdvertisement, RouteMetrics, RouteNeighbor, RoutingError,
 };
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use std::collections::HashMap;
@@ -241,8 +241,7 @@ impl RoutingControlPlane {
             return Err(RoutingControlError::AdvertisementTooLarge);
         }
         if neighbors.iter().any(|neighbor| {
-            neighbor.node_id == self.local_node
-                || !self.peers.contains_key(&neighbor.node_id)
+            neighbor.node_id == self.local_node || !self.peers.contains_key(&neighbor.node_id)
         }) {
             return Err(RoutingControlError::PeerUnknown);
         }
@@ -322,7 +321,13 @@ impl RoutingControlPlane {
 
 pub fn canonical_advertisement(ad: &RouteAdvertisement) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(
-        ROUTING_ADVERTISEMENT_MAGIC.len() + 32 + 8 + 8 + 8 + 2 + ad.neighbors.len().saturating_mul(88),
+        ROUTING_ADVERTISEMENT_MAGIC.len()
+            + 32
+            + 8
+            + 8
+            + 8
+            + 2
+            + ad.neighbors.len().saturating_mul(88),
     );
     bytes.extend_from_slice(&ROUTING_ADVERTISEMENT_MAGIC);
     bytes.extend_from_slice(ad.origin.as_bytes());
