@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  test:
+  format:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,5 +25,18 @@ jobs:
             git commit -m "style: cargo fmt"
             git push
           fi
-      - run: cargo check --workspace --all-targets
-      - run: cargo test --workspace
+
+  test:
+    needs: format
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check workspace
+        run: cargo check --workspace --all-targets
+      - name: Test workspace
+        run: cargo test --workspace
