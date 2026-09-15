@@ -1,4 +1,5 @@
-use super::{RoutingControlError, SignedRouteAdvertisement};
+use super::SignedRouteAdvertisement;
+use crate::network::NodeId;
 
 pub const ROUTE_CONTROL_MAGIC: [u8; 4] = *b"ARTE";
 pub const ROUTE_CONTROL_VERSION: u8 = 1;
@@ -122,7 +123,11 @@ pub fn decode_advertisement(
 
     let message = SignedRouteAdvertisement {
         advertisement: super::RouteAdvertisement::with_expiry(
-            origin, sequence, issued_at, expires_at, neighbors,
+            origin,
+            sequence,
+            issued_at,
+            expires_at,
+            neighbors,
         ),
         public_key,
         signature,
@@ -160,10 +165,10 @@ fn read_fixed(
     Ok(())
 }
 
-fn read_node_id(bytes: &[u8], cursor: &mut usize) -> Result<super::NodeId, RouteControlCodecError> {
+fn read_node_id(bytes: &[u8], cursor: &mut usize) -> Result<NodeId, RouteControlCodecError> {
     let mut value = [0u8; 32];
     read_fixed(bytes, cursor, &mut value)?;
-    Ok(super::NodeId::from_bytes(value))
+    Ok(NodeId::from_bytes(value))
 }
 
 fn read_u16(bytes: &[u8], cursor: &mut usize) -> Result<u16, RouteControlCodecError> {
@@ -187,7 +192,7 @@ fn read_u64(bytes: &[u8], cursor: &mut usize) -> Result<u64, RouteControlCodecEr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::network::{NodeId, TrafficPriority};
+    use crate::identity::fingerprint::Fingerprint;
     use crate::route::{RouteAdvertisement, RouteMetrics, RouteNeighbor};
     use ed25519_dalek::SigningKey;
 
@@ -195,10 +200,18 @@ mod tests {
         SigningKey::from_bytes(&[seed; 32])
     }
 
+    fn node_id(key: &SigningKey) -> NodeId {
+        let fingerprint = Fingerprint::from_domain(
+            b"aether/node-id/v1",
+            &key.verifying_key().to_bytes(),
+        );
+        NodeId::from_bytes(*fingerprint.as_bytes())
+    }
+
     fn advertisement() -> SignedRouteAdvertisement {
         SignedRouteAdvertisement::sign(
             RouteAdvertisement::with_expiry(
-                NodeId::from_bytes([1; 32]),
+                node_id(&key(1)),
                 7,
                 10,
                 70,
@@ -227,7 +240,6 @@ mod tests {
         let decoded = decode_advertisement(&encoded).unwrap();
         assert_eq!(decoded, message);
         assert_eq!(encode_advertisement(&decoded).unwrap(), encoded);
-        let _ = TrafficPriority::Interactive;
     }
 
     #[test]
