@@ -1,3 +1,4 @@
+pub mod compute;
 pub mod core;
 pub mod discovery;
 pub mod errors;
@@ -14,18 +15,11 @@ pub mod services;
 pub mod storage;
 pub mod transport;
 
+pub use compute::{ComputeCapacity, ComputeError, ComputeNode, DistributedCompute, Placement, Workload, WorkloadId, WorkloadSpec};
 pub use core::{AetherCore, CoreState};
-pub use discovery::{
-    BootstrapPeer, DiscoveryError, DiscoveryKind, FormationState, NetworkFormationEngine,
-    PeerRecord, ResourceRecord, ServiceRecord,
-};
+pub use discovery::{BootstrapPeer, DiscoveryError, DiscoveryKind, FormationState, NetworkFormationEngine, PeerRecord, ResourceRecord, ServiceRecord};
 pub use errors::CoreError;
-pub use naming::{
-    canonicalize_name, NameError, NameHash, NameRecord, NamingEngine, ResourceId, SignedNameUpdate,
-};
+pub use naming::{canonicalize_name, NameError, NameHash, NameRecord, NamingEngine, ResourceId, SignedNameUpdate};
 pub use security::{PrivacyContext, PrivacyToken, ReplayWindow, SecurityPolicy, SecurityProfile};
-pub use storage::{
-    ChunkDigest, ChunkId, ChunkStore, ContentChunk, ContentId, ContentManifest, DistributedStorage,
-    ManifestStore, ProviderAdvertisement, ProviderDirectory, RepairPlan, StorageError, StoredChunk,
-    StoredManifest,
-};
+pub use storage::{ChunkDigest, ChunkId, ChunkStore, ContentChunk, ContentId, ContentManifest, DistributedStorage, ManifestStore, ProviderAdvertisement, ProviderDirectory, RepairPlan, StorageError, StoredChunk, StoredManifest};
+pub use services::{prepare_upload, verify_artifact, BuildArtifact, DeploymentError, DeploymentPlan, SiteFile};
