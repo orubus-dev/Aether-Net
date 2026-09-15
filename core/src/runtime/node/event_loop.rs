@@ -244,7 +244,10 @@ impl NodeEventLoop {
     }
 
     async fn emit_formation_if_changed(&mut self) -> Result<(), NodeLoopError> {
-        let snapshot = (self.state.formation_state(), self.state.formation_generation());
+        let snapshot = (
+            self.state.formation_state(),
+            self.state.formation_generation(),
+        );
         if snapshot == self.formation_snapshot {
             return Ok(());
         }
