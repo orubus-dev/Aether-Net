@@ -99,7 +99,7 @@ The native L4 segment carries a flow identifier, sequence number, explicit cumul
 
 ```text
 Datagram       best-effort message delivery
-Stream         ordered byte/message sequencing with reliability machinery
+Stream         ordered message sequencing with reliability machinery
 ReliableStream ordered reliable delivery with retransmission
 Realtime       freshness-first delivery; stale frames are discarded
 ```
@@ -166,9 +166,108 @@ Still required before Phase 4 is production-complete:
 - connect route convergence directly to Phase 2's native L3 forwarding table;
 - implement live failure-triggered repair and multi-node integration tests.
 
+## Phase 5 - Physical Underlay Engine
+
+Phase 5 defines the carrier boundary underneath authenticated Aether links. L3 and L4 never address a physical technology directly. Every carrier is represented by the same adapter contract and exposes only the properties the network engine needs.
+
+### Underlay boundary
+
+```text
+                    Aether L2
+                        |
+                +-------+-------+
+                | PhysicalEngine |
+                +-------+-------+
+                        |
+       +----------------+----------------+
+       |                |                |
+    Ethernet          Wi-Fi          Bluetooth LE
+       |                |                |
+   hardware         hardware         hardware
+
+       Future carriers remain interchangeable:
+       Wi-Fi Direct / Wi-Fi Aware / UWB / LoRa /
+       cellular / satellite / direct radio / custom links
+```
+
+The physical layer is therefore an implementation boundary, not a network-addressing layer. Hardware-specific identifiers, device permissions, socket APIs, radio APIs, and driver details remain below the adapter interface.
+
+### Adapter contract
+
+Every physical adapter exposes:
+
+- its carrier type;
+- supported physical capabilities;
+- discovery of currently visible/connected physical links;
+- normalized underlay properties;
+- bounded error reporting.
+
+The normalized `UnderlayProperties` contract includes MTU, estimated bandwidth, latency, energy cost, and broadcast/multicast support. This lets the routing and link layers reason about heterogeneous carriers without knowing their implementation.
+
+### Physical link state
+
+A `PhysicalLink` represents one discovered carrier relationship and reports:
+
+- stable link identifier within the local physical subsystem;
+- carrier type;
+- estimated latency;
+- estimated bandwidth;
+- packet loss in parts-per-million;
+- signal quality;
+- active/inactive state.
+
+Measurements are validated at the physical boundary so malformed or impossible values cannot propagate upward into route selection.
+
+### Engine behavior
+
+`PhysicalEngine` provides a bounded registry for adapters and links. It supports full discovery, per-carrier refresh, deterministic active-link selection, aggregate capability reporting, and MTU-aware frame admission.
+
+Resource limits are explicit:
+
+- maximum adapter count;
+- maximum physical link count;
+- bounded discovery results;
+- no unbounded remote-controlled allocations.
+
+The engine selects links deterministically using loss first, latency second, bandwidth third, and link identifier as a stable tie-breaker. That keeps selection reproducible while allowing later routing phases to apply richer policy.
+
+### Carrier descriptors
+
+Platform-neutral descriptors currently exist for:
+
+- Ethernet;
+- Wi-Fi;
+- Wi-Fi Direct;
+- Bluetooth LE;
+- UWB/direct links.
+
+These descriptors intentionally do not pretend to be hardware drivers. They provide the production interface that real OS-specific implementations will satisfy in the platform layer.
+
+### Phase 5 integration gate
+
+Implemented:
+
+- transport-independent physical adapter contract;
+- bounded adapter registry;
+- bounded link registry;
+- normalized underlay properties;
+- capability aggregation;
+- link discovery and per-carrier refresh;
+- deterministic active-link selection;
+- MTU-aware frame validation;
+- carrier descriptors for Ethernet, Wi-Fi, Wi-Fi Direct, Bluetooth LE, and UWB/direct links;
+- physical-layer validation tests.
+
+Still required before Phase 5 is production-complete:
+
+- OS-specific hardware drivers;
+- actual L1/L2 transmission through those drivers;
+- platform permission and lifecycle handling;
+- interoperability tests using real Ethernet, Wi-Fi, Bluetooth, and radio hardware;
+- integration of measured physical metrics into the distributed routing engine.
+
 ## Later phases
 
-Phase 5 expands physical underlays and capability negotiation.
 Phase 6 builds global peer/discovery formation and partition recovery.
 Phase 7 builds distributed naming and resource resolution.
 Phase 8 builds distributed storage/content delivery.
