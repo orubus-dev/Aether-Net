@@ -27,7 +27,11 @@ impl AetherNodeRuntime {
             .device()
             .cloned()
             .ok_or(NodeRuntimeError::IdentityUnavailable)?;
-        let state = NodeState::new(Instant::now(), device);
+        let signing_key = core
+            .device_key()
+            .cloned()
+            .ok_or(NodeRuntimeError::IdentityUnavailable)?;
+        let state = NodeState::new(Instant::now(), device, signing_key);
         Ok(Self {
             core,
             transport: Some(transport),
@@ -46,12 +50,15 @@ impl AetherNodeRuntime {
     pub fn core(&self) -> &AetherCore {
         &self.core
     }
+
     pub fn formation_state(&self) -> FormationState {
         self.state.formation_state()
     }
+
     pub fn formation_generation(&self) -> u64 {
         self.state.formation_generation()
     }
+
     pub fn discovered_peer_count(&self) -> usize {
         self.state.formation.peer_count()
     }
@@ -128,6 +135,7 @@ impl std::fmt::Display for NodeRuntimeError {
         }
     }
 }
+
 impl std::error::Error for NodeRuntimeError {}
 
 impl std::fmt::Display for crate::transport::UdpTransportError {
@@ -143,4 +151,5 @@ impl std::fmt::Display for crate::transport::UdpTransportError {
         }
     }
 }
+
 impl std::error::Error for crate::transport::UdpTransportError {}
