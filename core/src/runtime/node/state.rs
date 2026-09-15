@@ -31,7 +31,10 @@ impl NodeState {
             lifecycle: NodeRuntimeState::Starting,
             started_at: now,
             peer_table: PeerTable::new(),
-            formation: DiscoveryFormation::new(crate::physical::PhysicalTransport::Ethernet, signing_key),
+            formation: DiscoveryFormation::new(
+                crate::physical::PhysicalTransport::Ethernet,
+                signing_key,
+            ),
             device,
             runtime_peers: HashMap::new(),
         }
