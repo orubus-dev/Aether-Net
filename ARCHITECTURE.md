@@ -1,6 +1,6 @@
 # AetherNet Architecture
 
-## Phase 1 — Core Protocol Foundation
+## Phase 1 - Core Protocol Foundation
 
 Phase 1 freezes the invariants that every later AetherNet engine depends on.
 
@@ -43,23 +43,72 @@ AetherNet separates stable cryptographic identity from ephemeral network-visible
 - Hot paths must not depend on centralized services or blocking global locks.
 - Resource limits are explicit and bounded to prevent untrusted peers from forcing unbounded allocation.
 
-### Phase 1 acceptance gate
+## Phase 2 - Native L3 Network Engine
 
-Phase 1 is architecturally complete only when all of the following remain true:
+Phase 2 adds the first native network-plane machinery above authenticated Aether links.
 
-- native L3 address type exists and is stable across underlay changes;
-- native L3 packet encoding/decoding is deterministic and bounded;
-- native L4 envelope is independent of IP/TCP semantics;
-- secure-by-default policy is represented in runtime configuration;
-- rotating privacy context and opaque tokens are available;
-- replay window rejects duplicates and stale packets;
-- protocol versioning and packet limits are explicit;
-- unit/conformance tests cover the security primitives;
-- later engines can depend on these interfaces without importing traditional Internet semantics.
+### Native forwarding model
+
+```text
+Aether source address
+        |
+        v
++-----------------------+
+| Native L3 packet      |
+| destination address   |
+| flow + sequence       |
+| hop limit + QoS       |
++-----------+-----------+
+            |
+            v
++-----------------------+
+| L3 forwarding engine  |
+| bounded route table   |
+| destination lookup    |
+| next-hop selection    |
+| hop-limit decrement   |
++-----------+-----------+
+            |
+       local? / forward
+```
+
+`AetherL3Engine` owns native route state and is independent of IP addresses, sockets, TCP, UDP, or any particular physical underlay. Route table capacity is explicitly bounded.
+
+### Packet lifecycle
+
+1. A packet is created with native source/destination addresses.
+2. The local L3 engine classifies it as local delivery or forwarding.
+3. Forwarding requires a valid route and a hop limit greater than one.
+4. Exactly one hop is consumed before forwarding.
+5. Expired routes are ignored and can be purged.
+6. No-route and expired-hop conditions are explicit forwarding errors.
+
+### Fragmentation / reassembly
+
+Native L3 fragmentation uses the packet flow identifier plus bounded fragment metadata carried inside fragmented payloads. The reassembly table has explicit entry, byte, and timeout limits. Duplicate identical fragments are harmless; conflicting fragments for the same flow/index are rejected.
+
+### Current Phase 2 status
+
+Implemented:
+
+- native 256-bit addressing;
+- native L3 packet encoding and decoding;
+- bounded route state;
+- destination lookup and next-hop selection;
+- hop-limit enforcement;
+- native fragmentation;
+- bounded reassembly;
+- conflict/duplicate fragment handling;
+- conformance tests for forwarding and reassembly.
+
+Still required before Phase 2 can be marked complete:
+
+- connect L3 forwarding to the authenticated runtime data path;
+- exercise forwarding across multiple live Aether nodes;
+- add integration tests for multi-hop delivery under real underlays.
 
 ## Later phases
 
-Phase 2 builds the complete native L3 forwarding engine.
 Phase 3 builds the complete native L4 transport engine.
 Phase 4 builds distributed routing and route convergence.
 Phase 5 expands physical underlays.
