@@ -59,11 +59,11 @@ impl PrivacyToken {
         let purpose_digest = purpose_hash.finalize();
 
         let hkdf = Hkdf::<Sha256>::new(None, secret);
-        let mut info = [0u8; 8 + 8 + 24];
+        let mut info = [0u8; 58];
         let prefix = b"aether:privacy:v1:";
         info[..prefix.len()].copy_from_slice(prefix);
-        info[18..26].copy_from_slice(&epoch.to_be_bytes());
-        info[26..58].copy_from_slice(&purpose_digest);
+        info[prefix.len()..prefix.len() + 8].copy_from_slice(&epoch.to_be_bytes());
+        info[prefix.len() + 8..].copy_from_slice(&purpose_digest);
 
         let mut output = [0u8; PRIVACY_TOKEN_LENGTH];
         hkdf.expand(&info, &mut output)
