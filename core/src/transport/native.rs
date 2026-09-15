@@ -2,7 +2,7 @@ use crate::network::AetherFlowId;
 
 pub const L4_MAGIC: [u8; 4] = *b"A4TH";
 pub const L4_VERSION: u8 = 1;
-pub const L4_HEADER_LENGTH: usize = 4 + 1 + 1 + 1 + 1 + 16 + 8 + 4;
+pub const L4_HEADER_LENGTH: usize = 48;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,7 +14,7 @@ pub enum AetherTransportMode {
 }
 
 impl AetherTransportMode {
-    fn from_u8(value: u8) -> Option<Self> {
+    pub(crate) fn from_u8(value: u8) -> Option<Self> {
         match value {
             0 => Some(Self::Datagram),
             1 => Some(Self::Stream),
@@ -30,11 +30,13 @@ pub struct AetherL4Segment {
     pub flow_id: AetherFlowId,
     pub mode: AetherTransportMode,
     pub sequence: u64,
+    pub acknowledgement: u64,
+    pub receive_window: u32,
     pub flags: u8,
     pub payload: Vec<u8>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum L4Error {
     InvalidLength,
     InvalidMagic,
@@ -55,26 +57,22 @@ impl AetherL4Segment {
         flow_id: AetherFlowId,
         mode: AetherTransportMode,
         sequence: u64,
+        acknowledgement: u64,
+        receive_window: u32,
         flags: u8,
         payload: Vec<u8>,
     ) -> Result<Self, L4Error> {
-        if payload.len() > MAX_L4_PAYLOAD {
+        if payload.len() > MAX_L4_PAYLOAD || payload.len() > u32::MAX as usize {
             return Err(L4Error::PayloadTooLarge);
         }
         if flags & !KNOWN_FLAGS != 0 {
             return Err(L4Error::InvalidFlags);
         }
-        Ok(Self {
-            flow_id,
-            mode,
-            sequence,
-            flags,
-            payload,
-        })
+        Ok(Self { flow_id, mode, sequence, acknowledgement, receive_window, flags, payload })
     }
 
     pub fn encode(&self) -> Result<Vec<u8>, L4Error> {
-        if self.payload.len() > MAX_L4_PAYLOAD {
+        if self.payload.len() > MAX_L4_PAYLOAD || self.payload.len() > u32::MAX as usize {
             return Err(L4Error::PayloadTooLarge);
         }
         if self.flags & !KNOWN_FLAGS != 0 {
@@ -88,13 +86,15 @@ impl AetherL4Segment {
         output.push(0);
         output.extend_from_slice(self.flow_id.as_bytes());
         output.extend_from_slice(&self.sequence.to_be_bytes());
+        output.extend_from_slice(&self.acknowledgement.to_be_bytes());
+        output.extend_from_slice(&self.receive_window.to_be_bytes());
         output.extend_from_slice(&(self.payload.len() as u32).to_be_bytes());
         output.extend_from_slice(&self.payload);
         Ok(output)
     }
 
     pub fn decode(bytes: &[u8]) -> Result<Self, L4Error> {
-        if bytes.len() < L4_HEADER_LENGTH {
+        if bytes.len() < L4_HEADER_LENGTH || bytes.len() > L4_HEADER_LENGTH + MAX_L4_PAYLOAD {
             return Err(L4Error::InvalidLength);
         }
         if bytes[0..4] != L4_MAGIC {
@@ -112,8 +112,12 @@ impl AetherL4Segment {
         flow_bytes.copy_from_slice(&bytes[8..24]);
         let mut sequence_bytes = [0u8; 8];
         sequence_bytes.copy_from_slice(&bytes[24..32]);
+        let mut acknowledgement_bytes = [0u8; 8];
+        acknowledgement_bytes.copy_from_slice(&bytes[32..40]);
+        let mut window_bytes = [0u8; 4];
+        window_bytes.copy_from_slice(&bytes[40..44]);
         let mut length_bytes = [0u8; 4];
-        length_bytes.copy_from_slice(&bytes[32..36]);
+        length_bytes.copy_from_slice(&bytes[44..48]);
         let payload_length = u32::from_be_bytes(length_bytes) as usize;
         if payload_length > MAX_L4_PAYLOAD || bytes.len() != L4_HEADER_LENGTH + payload_length {
             return Err(L4Error::InvalidLength);
@@ -122,6 +126,8 @@ impl AetherL4Segment {
             flow_id: AetherFlowId::from_bytes(flow_bytes),
             mode,
             sequence: u64::from_be_bytes(sequence_bytes),
+            acknowledgement: u64::from_be_bytes(acknowledgement_bytes),
+            receive_window: u32::from_be_bytes(window_bytes),
             flags,
             payload: bytes[L4_HEADER_LENGTH..].to_vec(),
         })
@@ -133,17 +139,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn l4_round_trip() {
+    fn l4_round_trip_preserves_ack_and_window() {
         let flow = AetherFlowId::from_bytes([7; 16]);
         let segment = AetherL4Segment::new(
             flow,
             AetherTransportMode::Realtime,
             42,
-            L4_FLAG_SYN,
+            41,
+            4096,
+            L4_FLAG_ACK,
             b"voice-frame".to_vec(),
         )
         .unwrap();
         let decoded = AetherL4Segment::decode(&segment.encode().unwrap()).unwrap();
         assert_eq!(decoded, segment);
+    }
+
+    #[test]
+    fn malformed_payload_length_is_rejected() {
+        let flow = AetherFlowId::from_bytes([1; 16]);
+        let segment = AetherL4Segment::new(flow, AetherTransportMode::Datagram, 0, 0, 0, 0, vec![1, 2]).unwrap();
+        let mut bytes = segment.encode().unwrap();
+        bytes[47] = 3;
+        assert_eq!(AetherL4Segment::decode(&bytes), Err(L4Error::InvalidLength));
     }
 }
