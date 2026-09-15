@@ -20,10 +20,10 @@ pub use engine::{
     DEFAULT_MAX_ADAPTERS, DEFAULT_MAX_LINKS, PhysicalAdapterExt, PhysicalEngine, PhysicalSnapshot,
     UnderlayFrame, UnderlayProperties,
 };
-pub use interface::{PhysicalAdapter, PhysicalDriver, PhysicalError};
+pub use interface::{PhysicalAdapter, PhysicalAnalytics, PhysicalDriver, PhysicalError};
 pub use link::{PhysicalLink, PhysicalLinkId};
 #[cfg(target_os = "linux")]
 pub use linux_ethernet::{AETHER_ETHERTYPE, LinuxEthernetDriver};
 #[cfg(target_os = "linux")]
 pub use linux_underlay::{LinuxInterface, LinuxInterfaceAnalytics, LinuxUnderlay};
-pub use runtime::{DEFAULT_MAX_DRIVERS, PhysicalRuntime};
+pub use runtime::{DEFAULT_MAX_DRIVERS, DEFAULT_POLL_BUDGET, PhysicalRuntime};
