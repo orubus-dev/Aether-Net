@@ -4,6 +4,7 @@ pub mod driver;
 pub mod engine;
 pub mod interface;
 pub mod link;
+pub mod runtime;
 
 pub use adapters::{
     bluetooth_le_adapter, direct_link_adapter, ethernet_adapter, link_id, wifi_adapter,
@@ -17,3 +18,4 @@ pub use engine::{
 };
 pub use interface::{PhysicalAdapter, PhysicalDriver, PhysicalError};
 pub use link::{PhysicalLink, PhysicalLinkId};
+pub use runtime::{PhysicalRuntime, DEFAULT_MAX_DRIVERS};
