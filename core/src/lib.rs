@@ -9,6 +9,7 @@ pub mod link;
 pub mod mesh;
 pub mod naming;
 pub mod network;
+pub mod operative;
 pub mod physical;
 pub mod route;
 pub mod runtime;
@@ -24,6 +25,7 @@ pub use discovery::{BootstrapPeer, DiscoveryError, DiscoveryKind, FormationState
 pub use errors::CoreError;
 pub use gateway::{GatewayDescriptor, GatewayDirection, GatewayDirectory, GatewayError, GatewayProtocol};
 pub use naming::{canonicalize_name, NameError, NameHash, NameRecord, NamingEngine, ResourceId, SignedNameUpdate};
+pub use operative::{AetherOperative, AetherPacketBudget, BandwidthGovernor, BandwidthLimits, DataPacket, OperativeError, OperativeProfile, TransferDirection, TransferId, TransferState};
 pub use security::{PrivacyContext, PrivacyToken, ReplayWindow, SecurityPolicy, SecurityProfile};
 pub use storage::{ChunkDigest, ChunkId, ChunkStore, ContentChunk, ContentId, ContentManifest, DistributedStorage, ManifestStore, ProviderAdvertisement, ProviderDirectory, RepairPlan, StorageError, StoredChunk, StoredManifest};
 pub use services::{prepare_upload, verify_artifact, BuildArtifact, DeploymentError, DeploymentPlan, SiteFile};
