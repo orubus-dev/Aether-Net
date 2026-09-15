@@ -1,6 +1,6 @@
 use super::capabilities::PhysicalTransport;
 use super::interface::PhysicalError;
-use super::link::{PhysicalLink, PhysicalLinkId, PhysicalLinkState};
+use super::link::{PhysicalLink, PhysicalLinkId};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -125,12 +125,11 @@ impl LinuxUnderlay {
         let link = PhysicalLink {
             id: stable_link_id(name, index),
             transport,
-            state: if up {
-                PhysicalLinkState::Up
-            } else {
-                PhysicalLinkState::Down
-            },
-            mtu,
+            estimated_latency_us: 0,
+            estimated_bandwidth_bps: speed_bps.unwrap_or(1),
+            packet_loss_ppm: 0,
+            signal_quality: if up { 255 } else { 0 },
+            active: up,
         };
         Ok(Some(LinuxInterface {
             name: name.to_owned(),
@@ -159,9 +158,9 @@ fn stable_link_id(name: &str, ifindex: u32) -> PhysicalLinkId {
     hasher.update(name.as_bytes());
     hasher.update(ifindex.to_be_bytes());
     let digest = hasher.finalize();
-    let mut bytes = [0u8; 32];
-    bytes.copy_from_slice(&digest);
-    PhysicalLinkId::from_bytes(bytes)
+    let mut bytes = [0u8; 16];
+    bytes.copy_from_slice(&digest[..16]);
+    PhysicalLinkId(bytes)
 }
 
 fn read_analytics(root: &Path) -> Result<LinuxInterfaceAnalytics, PhysicalError> {
