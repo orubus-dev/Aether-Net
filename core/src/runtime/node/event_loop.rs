@@ -23,34 +23,29 @@ pub const HELLO_INTERVAL: Duration = Duration::from_secs(10);
 
 pub struct NodeEventLoop {
     transport: UdpTransport,
-
     state: NodeState,
-
     events: mpsc::Sender<NodeEvent>,
-
     shutdown: mpsc::Receiver<()>,
-
     advertised_peers: Vec<SocketAddr>,
+    formation_snapshot: (crate::discovery::FormationState, u64),
 }
 
 impl NodeEventLoop {
     pub fn new(
         transport: UdpTransport,
-
         state: NodeState,
-
         events: mpsc::Sender<NodeEvent>,
-
         shutdown: mpsc::Receiver<()>,
-
         advertised_peers: Vec<SocketAddr>,
     ) -> Self {
+        let formation_snapshot = (state.formation_state(), state.formation_generation());
         Self {
             transport,
             state,
             events,
             shutdown,
             advertised_peers,
+            formation_snapshot,
         }
     }
 
@@ -58,86 +53,53 @@ impl NodeEventLoop {
         &self.state.peer_table
     }
 
+    pub fn formation_state(&self) -> crate::discovery::FormationState {
+        self.state.formation_state()
+    }
+
     pub async fn run(mut self) -> Result<NodeState, NodeLoopError> {
         self.state.lifecycle = NodeRuntimeState::Running;
+
+        if !self.advertised_peers.is_empty() {
+            self.state.formation.begin_formation();
+        }
 
         self.events
             .send(NodeEvent::Started)
             .await
             .map_err(|_| NodeLoopError::EventChannelClosed)?;
 
+        self.emit_formation_if_changed().await?;
+
         self.broadcast_hello().await?;
 
         let mut maintenance = time::interval(MAINTENANCE_INTERVAL);
-
         let mut hello_timer = time::interval(HELLO_INTERVAL);
-
         let mut receive_buffer = vec![0u8; MAX_DATAGRAM_SIZE];
 
         loop {
             tokio::select! {
-                shutdown =
-                    self.shutdown.recv() =>
-                {
+                shutdown = self.shutdown.recv() => {
                     if shutdown.is_some() {
-                        self.state.lifecycle =
-                            NodeRuntimeState::Stopping;
+                        self.state.lifecycle = NodeRuntimeState::Stopping;
                     }
-
-                    let _ =
-                        self.events
-                            .send(
-                                NodeEvent::Shutdown
-                            )
-                            .await;
-
-                    self.state.lifecycle =
-                        NodeRuntimeState::Stopped;
-
-                    return Ok(
-                        self.state
-                    );
+                    let _ = self.events.send(NodeEvent::Shutdown).await;
+                    self.state.lifecycle = NodeRuntimeState::Stopped;
+                    return Ok(self.state);
                 }
 
-                _ =
-                    hello_timer.tick()
-                => {
-                    self.broadcast_hello()
-                        .await?;
+                _ = hello_timer.tick() => {
+                    self.broadcast_hello().await?;
                 }
 
-                _ =
-                    maintenance.tick()
-                => {
-                    self.maintain()
-                        .await?;
+                _ = maintenance.tick() => {
+                    self.maintain().await?;
                 }
 
-                result =
-                    self.transport
-                        .receive_into(
-                            &mut receive_buffer
-                        )
-                => {
-                    let (
-                        length,
-                        source,
-                    ) =
-                        result
-                            .map_err(
-                                NodeLoopError::Transport
-                            )?;
-
-                    let bytes =
-                        &receive_buffer[
-                            ..length
-                        ];
-
-                    self.handle_datagram(
-                        bytes,
-                        source,
-                    )
-                    .await?;
+                result = self.transport.receive_into(&mut receive_buffer) => {
+                    let (length, source) = result.map_err(NodeLoopError::Transport)?;
+                    let bytes = &receive_buffer[..length];
+                    self.handle_datagram(bytes, source).await?;
                 }
             }
         }
@@ -145,47 +107,33 @@ impl NodeEventLoop {
 
     async fn broadcast_hello(&self) -> Result<(), NodeLoopError> {
         let hello = self.create_hello();
-
         let frame = DiscoveryControl::Hello(hello).encode();
-
         for peer in &self.advertised_peers {
             self.transport
                 .send_to(&frame, *peer)
                 .await
                 .map_err(NodeLoopError::Transport)?;
         }
-
         Ok(())
     }
 
     fn create_hello(&self) -> DiscoveryHello {
         let device = self.state.device();
-
         let node_id = NodeId::from_device(device);
-
         let mut capabilities = NodeCapabilities::NONE;
-
         capabilities = capabilities.insert(NodeCapabilities::SEND);
-
         capabilities = capabilities.insert(NodeCapabilities::RECEIVE);
-
         if device.capabilities.relay {
             capabilities = capabilities.insert(NodeCapabilities::RELAY);
         }
-
         if device.capabilities.gateway {
             capabilities = capabilities.insert(NodeCapabilities::GATEWAY);
         }
-
         DiscoveryHello {
             protocol: crate::network::ProtocolVersion::CURRENT,
-
             node_id: node_id.into_bytes(),
-
             device_id: *device.device_id.as_bytes(),
-
             capabilities,
-
             role: if device.capabilities.gateway {
                 NodeRole::Gateway
             } else if device.capabilities.relay {
@@ -193,7 +141,6 @@ impl NodeEventLoop {
             } else {
                 NodeRole::Device
             },
-
             timestamp: unix_timestamp(),
         }
     }
@@ -201,45 +148,42 @@ impl NodeEventLoop {
     async fn handle_datagram(
         &mut self,
         bytes: &[u8],
-
         source: SocketAddr,
     ) -> Result<(), NodeLoopError> {
         let control = DiscoveryControl::decode(bytes).map_err(NodeLoopError::InvalidDiscovery)?;
-
         match control {
             DiscoveryControl::Hello(hello) => {
                 self.handle_hello(hello, source).await?;
             }
-
             DiscoveryControl::HelloAck(ack) => {
                 self.handle_hello_ack(ack, source).await?;
             }
         }
-
         Ok(())
     }
 
     async fn handle_hello(
         &mut self,
         hello: DiscoveryHello,
-
         source: SocketAddr,
     ) -> Result<(), NodeLoopError> {
         let now = Instant::now();
-
         let node_id = self.state.peer_table.upsert(&hello, source, now);
-
         self.state
             .remember_peer(RuntimePeer::new(node_id, source, now));
-
         self.state.mark_peer_hello(node_id, now);
+
+        let discovery_node_id = NodeId::from_bytes(hello.node_id);
+        let device_id = crate::identity::device::DeviceId::from_bytes(hello.device_id);
+        self.state
+            .formation
+            .observe_peer(discovery_node_id, device_id, unix_timestamp())
+            .map_err(NodeLoopError::Discovery)?;
 
         let ack = HelloAck {
             node_id: NodeId::from_device(self.state.device()),
-
             timestamp: unix_timestamp(),
         };
-
         self.transport
             .send_to(&DiscoveryControl::HelloAck(ack).encode(), source)
             .await
@@ -252,7 +196,6 @@ impl NodeEventLoop {
             })
             .await
             .map_err(|_| NodeLoopError::EventChannelClosed)?;
-
         self.events
             .send(NodeEvent::PeerDiscovered {
                 node_id,
@@ -260,51 +203,64 @@ impl NodeEventLoop {
             })
             .await
             .map_err(|_| NodeLoopError::EventChannelClosed)?;
-
+        self.emit_formation_if_changed().await?;
         Ok(())
     }
 
     async fn handle_hello_ack(
         &mut self,
         ack: HelloAck,
-
         source: SocketAddr,
     ) -> Result<(), NodeLoopError> {
         let now = Instant::now();
-
         self.state.mark_peer_ack(ack.node_id, source, now);
-
         Ok(())
     }
 
     async fn maintain(&mut self) -> Result<(), NodeLoopError> {
         let now = Instant::now();
-
         let expired = self.state.peer_table.expire(now, PEER_TIMEOUT);
-
         for node_id in expired {
             self.state.mark_peer_expired(node_id);
-
+            self.state.formation.forget_peer(node_id);
             self.events
                 .send(NodeEvent::PeerExpired { node_id })
                 .await
                 .map_err(|_| NodeLoopError::EventChannelClosed)?;
         }
 
-        self.state.mark_stale_peers(now, PEER_STALE_TIMEOUT);
+        let formation_gc_removed = self.state.formation.maintain(unix_timestamp());
+        if formation_gc_removed != 0 {
+            self.emit_formation_if_changed().await?;
+        }
 
+        self.state.mark_stale_peers(now, PEER_STALE_TIMEOUT);
         self.events
             .send(NodeEvent::Tick)
             .await
             .map_err(|_| NodeLoopError::EventChannelClosed)?;
-
+        self.emit_formation_if_changed().await?;
         Ok(())
+    }
+
+    async fn emit_formation_if_changed(&mut self) -> Result<(), NodeLoopError> {
+        let snapshot = (self.state.formation_state(), self.state.formation_generation());
+        if snapshot == self.formation_snapshot {
+            return Ok(());
+        }
+        self.formation_snapshot = snapshot;
+        self.events
+            .send(NodeEvent::FormationChanged {
+                state: snapshot.0,
+                generation: snapshot.1,
+            })
+            .await
+            .map_err(|_| NodeLoopError::EventChannelClosed)
     }
 }
 
 fn unix_timestamp() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
-
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -314,9 +270,8 @@ fn unix_timestamp() -> u64 {
 #[derive(Debug)]
 pub enum NodeLoopError {
     Transport(UdpTransportError),
-
     InvalidDiscovery(crate::runtime::discovery::ControlError),
-
+    Discovery(crate::discovery::DiscoveryError),
     EventChannelClosed,
 }
 
@@ -324,11 +279,10 @@ impl std::fmt::Display for NodeLoopError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Transport(error) => write!(formatter, "transport error: {error}"),
-
             Self::InvalidDiscovery(error) => {
                 write!(formatter, "invalid discovery message: {error:?}")
             }
-
+            Self::Discovery(error) => write!(formatter, "discovery formation error: {error:?}"),
             Self::EventChannelClosed => formatter.write_str("node event channel closed"),
         }
     }
