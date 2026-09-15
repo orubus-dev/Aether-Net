@@ -31,8 +31,9 @@ pub use connect::{
 };
 pub use core::{AetherCore, CoreState};
 pub use discovery::{
-    BootstrapPeer, DiscoveryError, DiscoveryKind, FormationState, NetworkFormationEngine,
-    PeerRecord, ResourceRecord, ServiceRecord,
+    BootstrapPeer, DiscoveryError, DiscoveryGossipError, DiscoveryGossipState, DiscoveryKind,
+    FormationState, NetworkFormationEngine, PeerRecord, ResourceRecord, ServiceRecord,
+    SignedDiscoveryAdvertisement, DEFAULT_MAX_ADVERTISEMENT_ORIGINS,
 };
 pub use errors::CoreError;
 pub use gateway::{
