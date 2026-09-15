@@ -1,7 +1,7 @@
 use crate::discovery::{
-    BootstrapPeer, DiscoveryError, DiscoveryGossipState, FormationState, NetworkFormationEngine,
-    PeerRecord, SignedDiscoveryAdvertisement, MAX_ADVERTISEMENT_PEERS, MAX_ADVERTISEMENT_RESOURCES,
-    MAX_ADVERTISEMENT_SERVICES,
+    BootstrapPeer, DiscoveryError, DiscoveryGossipState, FormationState, MAX_ADVERTISEMENT_PEERS,
+    MAX_ADVERTISEMENT_RESOURCES, MAX_ADVERTISEMENT_SERVICES, NetworkFormationEngine, PeerRecord,
+    SignedDiscoveryAdvertisement,
 };
 use crate::identity::device::{DeviceId, DeviceSigningKey};
 use crate::network::NodeId;
@@ -49,13 +49,27 @@ impl DiscoveryFormation {
         }
     }
 
-    pub fn state(&self) -> FormationState { self.engine.state() }
-    pub fn generation(&self) -> u64 { self.engine.generation() }
-    pub fn peer_count(&self) -> usize { self.engine.peer_count() }
-    pub fn service_count(&self) -> usize { self.engine.service_count() }
-    pub fn resource_count(&self) -> usize { self.engine.resource_count() }
-    pub fn gossip_origin_count(&self) -> usize { self.gossip.origin_count() }
-    pub fn bootstrap_peers(&self) -> &[BootstrapPeer] { self.engine.bootstrap_peers() }
+    pub fn state(&self) -> FormationState {
+        self.engine.state()
+    }
+    pub fn generation(&self) -> u64 {
+        self.engine.generation()
+    }
+    pub fn peer_count(&self) -> usize {
+        self.engine.peer_count()
+    }
+    pub fn service_count(&self) -> usize {
+        self.engine.service_count()
+    }
+    pub fn resource_count(&self) -> usize {
+        self.engine.resource_count()
+    }
+    pub fn gossip_origin_count(&self) -> usize {
+        self.gossip.origin_count()
+    }
+    pub fn bootstrap_peers(&self) -> &[BootstrapPeer] {
+        self.engine.bootstrap_peers()
+    }
 
     pub fn add_bootstrap(
         &mut self,
@@ -152,16 +166,22 @@ impl DiscoveryFormation {
         self.engine.expire(now)
     }
 
-    pub fn mark_partitioned(&mut self) { self.engine.mark_partitioned(); }
+    pub fn mark_partitioned(&mut self) {
+        self.engine.mark_partitioned();
+    }
 
     pub fn recover_partition(&mut self, now: u64) {
         self.engine.recover_partition(now);
         self.last_gc = now;
     }
 
-    pub fn engine(&self) -> &NetworkFormationEngine { &self.engine }
+    pub fn engine(&self) -> &NetworkFormationEngine {
+        &self.engine
+    }
 
-    fn endpoint_hint_for(address: SocketAddr) -> [u8; 32] { endpoint_hint(address) }
+    fn endpoint_hint_for(address: SocketAddr) -> [u8; 32] {
+        endpoint_hint(address)
+    }
 }
 
 fn endpoint_hint(address: SocketAddr) -> [u8; 32] {
@@ -189,9 +209,15 @@ fn endpoint_hint(address: SocketAddr) -> [u8; 32] {
 mod tests {
     use super::*;
 
-    fn node(seed: u8) -> NodeId { NodeId::from_bytes([seed; 32]) }
-    fn device(seed: u8) -> DeviceId { DeviceId::from_bytes([seed; 32]) }
-    fn key() -> DeviceSigningKey { DeviceSigningKey::generate().unwrap() }
+    fn node(seed: u8) -> NodeId {
+        NodeId::from_bytes([seed; 32])
+    }
+    fn device(seed: u8) -> DeviceId {
+        DeviceId::from_bytes([seed; 32])
+    }
+    fn key() -> DeviceSigningKey {
+        DeviceSigningKey::generate().unwrap()
+    }
 
     #[test]
     fn bootstrap_is_registered_and_forms_network() {
@@ -245,7 +271,10 @@ mod tests {
     fn helper_method_uses_same_endpoint_encoding() {
         let address = "[2001:db8::1]:4242".parse().unwrap();
         let discovery = DiscoveryFormation::new(PhysicalTransport::Ethernet, key());
-        assert_eq!(DiscoveryFormation::endpoint_hint_for(address), endpoint_hint(address));
+        assert_eq!(
+            DiscoveryFormation::endpoint_hint_for(address),
+            endpoint_hint(address)
+        );
         assert_eq!(discovery.state(), FormationState::Isolated);
     }
 }
