@@ -313,7 +313,12 @@ mod tests {
             1,
             100,
             220,
-            &[PeerRecord::new(remote_node, remote_device.device_id, PhysicalTransport::Ethernet, 100)],
+            &[PeerRecord::new(
+                remote_node,
+                remote_device.device_id,
+                PhysicalTransport::Ethernet,
+                100,
+            )],
             &[],
             &[],
         )
@@ -332,7 +337,12 @@ mod tests {
             2,
             301,
             360,
-            &[PeerRecord::new(remote_node, remote_device.device_id, PhysicalTransport::Ethernet, 301)],
+            &[PeerRecord::new(
+                remote_node,
+                remote_device.device_id,
+                PhysicalTransport::Ethernet,
+                301,
+            )],
             &[],
             &[],
         )
