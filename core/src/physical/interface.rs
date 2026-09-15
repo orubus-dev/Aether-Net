@@ -16,4 +16,19 @@ pub enum PhysicalError {
     DiscoveryFailed,
     ConnectionFailed,
     CapacityExceeded,
+    FrameTooLarge,
+}
+
+/// A concrete platform-facing carrier. Native Aether code hands this driver
+/// an already-formed link frame without depending on a specific radio/wire.
+pub trait PhysicalDriver: PhysicalAdapter + Send + Sync {
+    fn transmit(
+        &mut self,
+        link_id: super::link::PhysicalLinkId,
+        frame: &[u8],
+    ) -> Result<(), PhysicalError>;
+
+    fn poll_receive(
+        &mut self,
+    ) -> Result<Option<(super::link::PhysicalLinkId, Vec<u8>)>, PhysicalError>;
 }
