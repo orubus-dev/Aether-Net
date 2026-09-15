@@ -19,8 +19,8 @@ pub use native_stack::{
 };
 
 pub use discovery::{
-    AuthMessageError, ControlError, DiscoveryControl, DiscoveryHello, DiscoveryMessageType,
-    HelloAck, HelloError, PeerChallengeMessage, PeerResponseMessage,
+    AuthMessageError, ControlError, DiscoveryControl, DiscoveryFormation, DiscoveryHello,
+    DiscoveryMessageType, HelloAck, HelloError, PeerChallengeMessage, PeerResponseMessage,
 };
 pub use events::CoreEvent;
 pub use forwarding::{
