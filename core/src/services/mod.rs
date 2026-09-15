@@ -1,12 +1,11 @@
-pub mod game;
+pub mod hosting;
 pub mod policy;
 pub mod registry;
 pub mod service;
 
-pub use game::{GameHostOffer, GameHostingMode};
-
-pub use policy::ServiceTrafficPolicy;
+pub use hosting::{
+    DeploymentSource, HostingError, SiteId, SiteManifest, SITE_ID_LENGTH,
+};
 
 pub use registry::RuntimeServiceRegistry;
-
-pub use service::{ServiceDescriptor, ServiceId, ServiceKind};
+pub use service::RuntimeService;
