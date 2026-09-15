@@ -99,9 +99,22 @@
 - [ ] Native resolver traffic over Aether L3/L4.
 - [ ] Integration with Phase 6 discovery and Phase 8 resource storage.
 
-## Phase 8 - Distributed Storage & CDN
+## Phase 8 - Distributed Storage & CDN [IMPLEMENTED - DISTRIBUTED INTEGRATION PENDING]
 
-- Chunking, replication, repair, provider selection and caching.
+- [x] Content-addressed chunk digests with domain separation.
+- [x] Bounded local chunk store with explicit byte and item capacity.
+- [x] Chunk integrity verification on read.
+- [x] Deduplicating chunk replacement by content/chunk identity.
+- [x] TTL-based chunk expiry and bounded garbage collection.
+- [x] Bounded manifest store with monotonic version convergence.
+- [x] Signed provider advertisements with Ed25519 verification.
+- [x] Provider TTL, capacity, cost and reliability validation.
+- [x] Provider selection for content retrieval.
+- [x] Replica repair planning with explicit desired replica count.
+- [ ] Native storage request/response messages over Aether L3/L4.
+- [ ] Live replica transfer and automatic repair across authenticated peers.
+- [ ] Integration with Phase 6 resource discovery and Phase 7 name resolution.
+- [ ] Multi-node storage/failure/recovery integration tests.
 
 ## Phase 9 - Distributed Compute & Services
 
