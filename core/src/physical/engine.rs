@@ -20,20 +20,33 @@ pub struct PhysicalEngine {
 
 impl PhysicalEngine {
     pub fn new(max_adapters: usize, max_links: usize) -> Self {
-        Self { max_adapters: max_adapters.max(1), max_links: max_links.max(1), adapters: Vec::new(), links: Vec::new() }
+        Self {
+            max_adapters: max_adapters.max(1),
+            max_links: max_links.max(1),
+            adapters: Vec::new(),
+            links: Vec::new(),
+        }
     }
 
     pub fn add_adapter(&mut self, adapter: PhysicalAdapter) -> Result<(), PhysicalError> {
-        if self.adapters.len() >= self.max_adapters { return Err(PhysicalError::CapacityExceeded); }
+        if self.adapters.len() >= self.max_adapters {
+            return Err(PhysicalError::CapacityExceeded);
+        }
         self.adapters.push(adapter);
         Ok(())
     }
 
-    pub fn adapter_count(&self) -> usize { self.adapters.len() }
-    pub fn links(&self) -> &[PhysicalLink] { &self.links }
+    pub fn adapter_count(&self) -> usize {
+        self.adapters.len()
+    }
+    pub fn links(&self) -> &[PhysicalLink] {
+        &self.links
+    }
 
     pub fn replace_links(&mut self, discovered: Vec<PhysicalLink>) -> Result<usize, PhysicalError> {
-        if discovered.len() > self.max_links { return Err(PhysicalError::CapacityExceeded); }
+        if discovered.len() > self.max_links {
+            return Err(PhysicalError::CapacityExceeded);
+        }
         let mut unique = Vec::with_capacity(discovered.len());
         for link in discovered {
             validate_link(link)?;
@@ -48,7 +61,10 @@ impl PhysicalEngine {
     }
 
     pub fn snapshot(&self) -> PhysicalSnapshot {
-        PhysicalSnapshot { adapter_count: self.adapters.len(), active_link_count: self.links.iter().filter(|link| link.active).count() }
+        PhysicalSnapshot {
+            adapter_count: self.adapters.len(),
+            active_link_count: self.links.iter().filter(|link| link.active).count(),
+        }
     }
 
     pub fn discover_all(&mut self) -> Result<usize, PhysicalError> {
@@ -62,6 +78,8 @@ impl PhysicalEngine {
 }
 
 fn validate_link(link: PhysicalLink) -> Result<(), PhysicalError> {
-    if link.mtu == 0 { return Err(PhysicalError::InvalidMtu); }
+    if link.mtu == 0 {
+        return Err(PhysicalError::InvalidMtu);
+    }
     Ok(())
 }
