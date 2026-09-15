@@ -73,7 +73,9 @@ impl Default for LinuxUnderlay {
 
 impl LinuxUnderlay {
     pub fn new() -> Self {
-        Self { sysfs_root: PathBuf::from("/sys/class/net") }
+        Self {
+            sysfs_root: PathBuf::from("/sys/class/net"),
+        }
     }
 
     pub fn discover(&self) -> Result<Vec<LinuxInterface>, PhysicalError> {
@@ -123,7 +125,11 @@ impl LinuxUnderlay {
         let link = PhysicalLink {
             id: stable_link_id(name, index),
             transport,
-            state: if up { PhysicalLinkState::Up } else { PhysicalLinkState::Down },
+            state: if up {
+                PhysicalLinkState::Up
+            } else {
+                PhysicalLinkState::Down
+            },
             mtu,
         };
         Ok(Some(LinuxInterface {
@@ -177,11 +183,17 @@ fn read_string(path: impl AsRef<Path>) -> Result<String, PhysicalError> {
 }
 
 fn read_u64(path: impl AsRef<Path>) -> Result<u64, PhysicalError> {
-    read_string(path)?.trim().parse().map_err(|_| PhysicalError::DiscoveryFailed)
+    read_string(path)?
+        .trim()
+        .parse()
+        .map_err(|_| PhysicalError::DiscoveryFailed)
 }
 
 fn read_u32(path: impl AsRef<Path>) -> Result<u32, PhysicalError> {
-    read_string(path)?.trim().parse().map_err(|_| PhysicalError::DiscoveryFailed)
+    read_string(path)?
+        .trim()
+        .parse()
+        .map_err(|_| PhysicalError::DiscoveryFailed)
 }
 
 fn read_optional_speed(path: impl AsRef<Path>) -> Option<u64> {
@@ -205,10 +217,7 @@ mod tests {
 
     #[test]
     fn stable_ids_are_domain_separated() {
-        assert_ne!(
-            stable_link_id("eth0", 2),
-            stable_link_id("eth1", 2)
-        );
+        assert_ne!(stable_link_id("eth0", 2), stable_link_id("eth1", 2));
         assert_eq!(stable_link_id("eth0", 2), stable_link_id("eth0", 2));
     }
 }

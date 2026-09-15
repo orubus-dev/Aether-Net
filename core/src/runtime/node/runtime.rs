@@ -28,17 +28,33 @@ impl AetherNodeRuntime {
             .cloned()
             .ok_or(NodeRuntimeError::IdentityUnavailable)?;
         let state = NodeState::new(Instant::now(), device);
-        Ok(Self { core, transport: Some(transport), state })
+        Ok(Self {
+            core,
+            transport: Some(transport),
+            state,
+        })
     }
 
     pub fn local_addr(&self) -> Result<SocketAddr, NodeRuntimeError> {
-        self.transport.as_ref().ok_or(NodeRuntimeError::Stopped)?.local_addr().map_err(NodeRuntimeError::Transport)
+        self.transport
+            .as_ref()
+            .ok_or(NodeRuntimeError::Stopped)?
+            .local_addr()
+            .map_err(NodeRuntimeError::Transport)
     }
 
-    pub fn core(&self) -> &AetherCore { &self.core }
-    pub fn formation_state(&self) -> FormationState { self.state.formation_state() }
-    pub fn formation_generation(&self) -> u64 { self.state.formation_generation() }
-    pub fn discovered_peer_count(&self) -> usize { self.state.formation.peer_count() }
+    pub fn core(&self) -> &AetherCore {
+        &self.core
+    }
+    pub fn formation_state(&self) -> FormationState {
+        self.state.formation_state()
+    }
+    pub fn formation_generation(&self) -> u64 {
+        self.state.formation_generation()
+    }
+    pub fn discovered_peer_count(&self) -> usize {
+        self.state.formation.peer_count()
+    }
 
     pub async fn run(self, advertised_peers: Vec<SocketAddr>) -> Result<(), NodeRuntimeError> {
         let (_shutdown_tx, shutdown_rx) = mpsc::channel(1);
@@ -54,7 +70,13 @@ impl AetherNodeRuntime {
         let transport = self.transport.take().ok_or(NodeRuntimeError::Stopped)?;
         let (events_tx, mut events_rx) = mpsc::channel(128);
         let (loop_shutdown_tx, loop_shutdown_rx) = mpsc::channel(1);
-        let event_loop = NodeEventLoop::new(transport, self.state, events_tx, loop_shutdown_rx, advertised_peers);
+        let event_loop = NodeEventLoop::new(
+            transport,
+            self.state,
+            events_tx,
+            loop_shutdown_rx,
+            advertised_peers,
+        );
         let loop_task = tokio::spawn(event_loop.run());
 
         loop {
@@ -112,7 +134,9 @@ impl std::fmt::Display for crate::transport::UdpTransportError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Bind(error) => write!(formatter, "UDP bind failed: {error}"),
-            Self::LocalAddress(error) => write!(formatter, "could not read local UDP address: {error}"),
+            Self::LocalAddress(error) => {
+                write!(formatter, "could not read local UDP address: {error}")
+            }
             Self::Send(error) => write!(formatter, "UDP send failed: {error}"),
             Self::Receive(error) => write!(formatter, "UDP receive failed: {error}"),
             Self::DatagramTooLarge => formatter.write_str("UDP datagram exceeds maximum size"),
