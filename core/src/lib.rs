@@ -12,6 +12,7 @@ pub mod network;
 pub mod operative;
 pub mod operative_os;
 pub mod physical;
+pub mod platform;
 pub mod route;
 pub mod runtime;
 pub mod security;
@@ -46,6 +47,10 @@ pub use operative::{
 pub use operative_os::{
     AetherNetOs, BootState, CapabilityLevel, HealthState, NodeResources, OperativeIdentity,
     OperativeStatus, OsError,
+};
+pub use platform::{
+    HostPaths, HostPlatform, RestartPolicy, ServiceLifecycle, ServiceSpec, ServiceStatus,
+    ServiceSupervisor,
 };
 pub use security::{PrivacyContext, PrivacyToken, ReplayWindow, SecurityPolicy, SecurityProfile};
 pub use services::{
