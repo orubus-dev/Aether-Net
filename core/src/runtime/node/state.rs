@@ -1,5 +1,5 @@
 use crate::discovery::FormationState;
-use crate::identity::device::DeviceState;
+use crate::identity::device::{DeviceSigningKey, DeviceState};
 use crate::network::NodeId;
 use crate::runtime::discovery::DiscoveryFormation;
 use crate::runtime::peers::{PeerTable, RuntimePeer, RuntimePeerState};
@@ -26,12 +26,12 @@ pub struct NodeState {
 }
 
 impl NodeState {
-    pub fn new(now: Instant, device: DeviceState) -> Self {
+    pub fn new(now: Instant, device: DeviceState, signing_key: DeviceSigningKey) -> Self {
         Self {
             lifecycle: NodeRuntimeState::Starting,
             started_at: now,
             peer_table: PeerTable::new(),
-            formation: DiscoveryFormation::new(crate::physical::PhysicalTransport::Ethernet),
+            formation: DiscoveryFormation::new(crate::physical::PhysicalTransport::Ethernet, signing_key),
             device,
             runtime_peers: HashMap::new(),
         }
