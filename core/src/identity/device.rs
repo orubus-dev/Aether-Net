@@ -34,7 +34,7 @@ impl fmt::Debug for DeviceId {
         formatter.write_str("DeviceId(")?;
 
         for byte in &self.0 {
-            write!(formatter, "{byte:02x}")?;
+            write!(formatter, "{byte:02x}",)?;
         }
 
         formatter.write_str(")")
@@ -44,7 +44,7 @@ impl fmt::Debug for DeviceId {
 impl fmt::Display for DeviceId {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         for byte in &self.0 {
-            write!(formatter, "{byte:02x}")?;
+            write!(formatter, "{byte:02x}",)?;
         }
 
         Ok(())
@@ -53,6 +53,14 @@ impl fmt::Display for DeviceId {
 
 pub struct DeviceSigningKey {
     signing_key: SigningKey,
+}
+
+impl Clone for DeviceSigningKey {
+    fn clone(&self) -> Self {
+        Self {
+            signing_key: SigningKey::from_bytes(self.signing_key.as_bytes()),
+        }
+    }
 }
 
 impl DeviceSigningKey {
