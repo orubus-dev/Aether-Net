@@ -184,91 +184,124 @@ Phase 5 defines the carrier boundary underneath authenticated Aether links. L3 a
     Ethernet          Wi-Fi          Bluetooth LE
        |                |                |
    hardware         hardware         hardware
-
-       Future carriers remain interchangeable:
-       Wi-Fi Direct / Wi-Fi Aware / UWB / LoRa /
-       cellular / satellite / direct radio / custom links
 ```
 
-The physical layer is therefore an implementation boundary, not a network-addressing layer. Hardware-specific identifiers, device permissions, socket APIs, radio APIs, and driver details remain below the adapter interface.
-
-### Adapter contract
-
-Every physical adapter exposes:
-
-- its carrier type;
-- supported physical capabilities;
-- discovery of currently visible/connected physical links;
-- normalized underlay properties;
-- bounded error reporting.
-
-The normalized `UnderlayProperties` contract includes MTU, estimated bandwidth, latency, energy cost, and broadcast/multicast support. This lets the routing and link layers reason about heterogeneous carriers without knowing their implementation.
-
-### Physical link state
-
-A `PhysicalLink` represents one discovered carrier relationship and reports:
-
-- stable link identifier within the local physical subsystem;
-- carrier type;
-- estimated latency;
-- estimated bandwidth;
-- packet loss in parts-per-million;
-- signal quality;
-- active/inactive state.
-
-Measurements are validated at the physical boundary so malformed or impossible values cannot propagate upward into route selection.
-
-### Engine behavior
-
-`PhysicalEngine` provides a bounded registry for adapters and links. It supports full discovery, per-carrier refresh, deterministic active-link selection, aggregate capability reporting, and MTU-aware frame admission.
-
-Resource limits are explicit:
-
-- maximum adapter count;
-- maximum physical link count;
-- bounded discovery results;
-- no unbounded remote-controlled allocations.
-
-The engine selects links deterministically using loss first, latency second, bandwidth third, and link identifier as a stable tie-breaker. That keeps selection reproducible while allowing later routing phases to apply richer policy.
-
-### Carrier descriptors
-
-Platform-neutral descriptors currently exist for:
-
-- Ethernet;
-- Wi-Fi;
-- Wi-Fi Direct;
-- Bluetooth LE;
-- UWB/direct links.
-
-These descriptors intentionally do not pretend to be hardware drivers. They provide the production interface that real OS-specific implementations will satisfy in the platform layer.
+Hardware-specific identifiers, permissions, socket APIs, radio APIs, and driver details remain below the adapter interface.
 
 ### Phase 5 integration gate
 
 Implemented:
 
 - transport-independent physical adapter contract;
-- bounded adapter registry;
-- bounded link registry;
+- bounded adapter and link registries;
 - normalized underlay properties;
 - capability aggregation;
 - link discovery and per-carrier refresh;
 - deterministic active-link selection;
 - MTU-aware frame validation;
-- carrier descriptors for Ethernet, Wi-Fi, Wi-Fi Direct, Bluetooth LE, and UWB/direct links;
-- physical-layer validation tests.
+- platform-neutral carrier descriptors.
 
 Still required before Phase 5 is production-complete:
 
 - OS-specific hardware drivers;
 - actual L1/L2 transmission through those drivers;
 - platform permission and lifecycle handling;
-- interoperability tests using real Ethernet, Wi-Fi, Bluetooth, and radio hardware;
-- integration of measured physical metrics into the distributed routing engine.
+- hardware interoperability tests;
+- physical metrics integrated into distributed routing.
+
+## Phase 6 - Network Formation & Discovery
+
+Phase 6 turns isolated Aether nodes into a self-forming network. It sits between physical discovery and distributed routing/service layers: physical adapters reveal reachable carrier relationships, the formation engine tracks peers and advertised resources, and the routing engine later consumes that topology.
+
+### Formation state machine
+
+```text
+             bootstrap / discovery
+                  +---------+
+                  | Isolated |
+                  +----+----+
+                       |
+                       v
+                  +----+----+
+                  | Forming  |
+                  +----+----+
+                       |
+                 peer observed
+                       |
+                       v
+                  +----+----+
+                  |Connected |
+                  +----+----+
+                       |
+                 partition/failure
+                       |
+                       v
+                  +----+------+
+                  |Partitioned|
+                  +-----------+
+                       |
+                  recovery
+                       |
+                       +----> Forming / Connected
+```
+
+`NetworkFormationEngine` owns bounded bootstrap peers, live peer records, service records, and resource records. Each record has an explicit validity interval so stale network state cannot persist forever.
+
+### Bootstrap
+
+Bootstrap peers are optional starting points used to move a node from `Isolated` to `Forming`. Bootstrap information is deliberately limited to native node/device identifiers, carrier type, and an opaque endpoint hint; it does not introduce an IP dependency into the discovery model.
+
+### Peer discovery
+
+A peer becomes `Connected` after a valid peer record is observed. Duplicate peer observations update the existing record rather than creating unlimited entries. Peer records expire automatically and the formation engine recomputes its state after cleanup.
+
+### Service discovery
+
+Services are represented as owner-scoped identifiers with a kind, version, and validity interval. Newer versions replace older versions while stale versions are rejected. This is the discovery primitive used later by Aether services, communications, storage, and compute.
+
+### Resource discovery
+
+Resources are represented by stable content/resource identifiers, a provider node, resource kind, version, and validity interval. Providers can be replaced by newer versions without requiring a centralized registry.
+
+### Partition and recovery
+
+A partition is explicit state, not an implicit failure. The engine increments a formation generation during partition/recovery transitions and removes expired peer/service/resource state before attempting to reform. A node with no peers and no bootstrap configuration returns to `Isolated`; a node with bootstrap information returns to `Forming` and can seek peers again.
+
+### Resource controls
+
+The discovery plane is bounded by explicit maxima for:
+
+- bootstrap peers;
+- live peer records;
+- service records;
+- resource records.
+
+Malformed, expired, duplicate, or over-capacity records are rejected explicitly. This prevents remote discovery input from becoming an unbounded memory surface.
+
+### Phase 6 integration gate
+
+Implemented:
+
+- bounded bootstrap-peer configuration;
+- formation state machine for isolated/forming/connected/partitioned operation;
+- bounded peer discovery state;
+- peer record expiration;
+- service discovery records with monotonic version replacement;
+- resource discovery records with monotonic version replacement;
+- partition generation tracking and recovery transitions;
+- explicit discovery memory limits;
+- discovery conformance tests.
+
+Still required before Phase 6 is production-complete:
+
+- disseminate discovery records through authenticated Aether peers;
+- connect physical adapter discovery to the formation engine;
+- feed formation/topology state into Phase 4 distributed routing;
+- cryptographically authenticate discovery records;
+- multi-node partition/heal integration tests.
 
 ## Later phases
 
-Phase 6 builds global peer/discovery formation and partition recovery.
 Phase 7 builds distributed naming and resource resolution.
 Phase 8 builds distributed storage/content delivery.
 Phase 9 builds distributed compute/service infrastructure.
