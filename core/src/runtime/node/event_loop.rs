@@ -1,6 +1,6 @@
 use crate::network::{NodeCapabilities, NodeId, NodeRole};
 use crate::runtime::discovery::{
-    DiscoveryControl, DiscoveryHello, HelloAck, DISCOVERY_ADVERTISEMENT_INTERVAL_SECONDS,
+    DISCOVERY_ADVERTISEMENT_INTERVAL_SECONDS, DiscoveryControl, DiscoveryHello, HelloAck,
 };
 use crate::runtime::node::{NodeEvent, NodeRuntimeState, NodeState};
 use crate::runtime::peers::RuntimePeer;
@@ -151,7 +151,9 @@ impl NodeEventLoop {
         let targets: Vec<_> = self
             .state
             .runtime_peers()
-            .filter_map(|(_, peer)| (peer.address != SocketAddr::from(([0, 0, 0, 0], 0))).then_some(peer.address))
+            .filter_map(|(_, peer)| {
+                (peer.address != SocketAddr::from(([0, 0, 0, 0], 0))).then_some(peer.address)
+            })
             .take(DISCOVERY_GOSSIP_FANOUT)
             .collect();
         for target in targets {
@@ -261,9 +263,7 @@ impl NodeEventLoop {
         let targets: Vec<_> = self
             .state
             .runtime_peers()
-            .filter_map(|(_, peer)| {
-                (peer.address != source).then_some(peer.address)
-            })
+            .filter_map(|(_, peer)| (peer.address != source).then_some(peer.address))
             .take(DISCOVERY_GOSSIP_FANOUT)
             .collect();
         for target in targets {
@@ -283,7 +283,10 @@ impl NodeEventLoop {
             .create_advertisement(node_id, unix_timestamp())
             .map_err(NodeLoopError::Discovery)?;
         self.transport
-            .send_to(&DiscoveryControl::Advertisement(advertisement).encode(), target)
+            .send_to(
+                &DiscoveryControl::Advertisement(advertisement).encode(),
+                target,
+            )
             .await
             .map_err(NodeLoopError::Transport)
     }
