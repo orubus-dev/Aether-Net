@@ -1,7 +1,7 @@
 use crate::discovery::{
-    BootstrapPeer, DiscoveryError, DiscoveryGossipState, FormationState, MAX_ADVERTISEMENT_PEERS,
-    MAX_ADVERTISEMENT_RESOURCES, MAX_ADVERTISEMENT_SERVICES, NetworkFormationEngine, PeerRecord,
-    SignedDiscoveryAdvertisement,
+    BootstrapPeer, DiscoveryError, DiscoveryGossipState, FormationState, NetworkFormationEngine,
+    PeerRecord, SignedDiscoveryAdvertisement, MAX_ADVERTISEMENT_PEERS, MAX_ADVERTISEMENT_RESOURCES,
+    MAX_ADVERTISEMENT_SERVICES,
 };
 use crate::identity::device::{DeviceId, DeviceSigningKey};
 use crate::network::NodeId;
@@ -141,8 +141,8 @@ impl DiscoveryFormation {
             &self.signing_key,
             node_id,
             self.signing_key.device_id(),
+            sequence,
             now,
-            now.saturating_add(DISCOVERY_ADVERTISEMENT_TTL_SECONDS),
             now.saturating_add(DISCOVERY_ADVERTISEMENT_TTL_SECONDS),
             &peers,
             &services,
@@ -249,7 +249,22 @@ mod tests {
         let advertisement = discovery.create_advertisement(node, 100).unwrap();
         assert_eq!(advertisement.origin, node);
         assert_eq!(advertisement.device_id, device.device_id);
+        assert_eq!(advertisement.sequence, 1);
         assert_eq!(advertisement.peer_records().count(), 1);
+    }
+
+    #[test]
+    fn advertisement_sequences_increment() {
+        let signing_key = key();
+        let device = crate::identity::device::DeviceState::from_signing_key(
+            &signing_key,
+            0,
+            Default::default(),
+        );
+        let node = NodeId::from_device(&device);
+        let mut discovery = DiscoveryFormation::new(PhysicalTransport::Ethernet, signing_key);
+        assert_eq!(discovery.create_advertisement(node, 100).unwrap().sequence, 1);
+        assert_eq!(discovery.create_advertisement(node, 101).unwrap().sequence, 2);
     }
 
     #[test]
