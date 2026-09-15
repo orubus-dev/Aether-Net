@@ -1,37 +1,54 @@
 use crate::discovery::{
-    BootstrapPeer, DiscoveryError, FormationState, NetworkFormationEngine, PeerRecord,
+    BootstrapPeer, DiscoveryError, DiscoveryGossipState, FormationState, NetworkFormationEngine,
+    PeerRecord, SignedDiscoveryAdvertisement, MAX_ADVERTISEMENT_PEERS, MAX_ADVERTISEMENT_RESOURCES,
+    MAX_ADVERTISEMENT_SERVICES,
 };
-use crate::identity::device::DeviceId;
+use crate::identity::device::{DeviceId, DeviceSigningKey};
 use crate::network::NodeId;
 use crate::physical::PhysicalTransport;
 
 use std::net::SocketAddr;
 
 pub const DEFAULT_DISCOVERY_GC_INTERVAL_SECONDS: u64 = 5;
+pub const DISCOVERY_ADVERTISEMENT_INTERVAL_SECONDS: u64 = 10;
+const DISCOVERY_ADVERTISEMENT_TTL_SECONDS: u64 = 20;
 
-/// Runtime-owned Phase 6 coordinator. It turns authenticated/validated discovery
-/// observations into bounded network-formation state and provides a single
-/// integration point for native underlays and legacy bootstrap carriers.
+/// Runtime-owned Phase 6 coordinator. It turns validated discovery observations
+/// into bounded formation state and is also the authority for authenticated
+/// discovery gossip produced by this node.
 pub struct DiscoveryFormation {
     engine: NetworkFormationEngine,
+    gossip: DiscoveryGossipState,
     transport: PhysicalTransport,
+    signing_key: DeviceSigningKey,
     last_gc: u64,
+    sequence: u64,
 }
 
 impl DiscoveryFormation {
-    pub fn new(transport: PhysicalTransport) -> Self {
+    pub fn new(transport: PhysicalTransport, signing_key: DeviceSigningKey) -> Self {
         Self {
             engine: NetworkFormationEngine::new(),
+            gossip: DiscoveryGossipState::new(),
             transport,
+            signing_key,
             last_gc: 0,
+            sequence: 0,
         }
     }
 
-    pub fn with_engine(transport: PhysicalTransport, engine: NetworkFormationEngine) -> Self {
+    pub fn with_engine(
+        transport: PhysicalTransport,
+        signing_key: DeviceSigningKey,
+        engine: NetworkFormationEngine,
+    ) -> Self {
         Self {
             engine,
+            gossip: DiscoveryGossipState::new(),
             transport,
+            signing_key,
             last_gc: 0,
+            sequence: 0,
         }
     }
 
@@ -53,6 +70,10 @@ impl DiscoveryFormation {
 
     pub fn resource_count(&self) -> usize {
         self.engine.resource_count()
+    }
+
+    pub fn gossip_origin_count(&self) -> usize {
+        self.gossip.origin_count()
     }
 
     pub fn bootstrap_peers(&self) -> &[BootstrapPeer] {
@@ -83,6 +104,56 @@ impl DiscoveryFormation {
             PeerRecord::new(node_id, device_id, self.transport, now),
             now,
         )
+    }
+
+    pub fn accept_advertisement(
+        &mut self,
+        advertisement: &SignedDiscoveryAdvertisement,
+        now: u64,
+    ) -> Result<bool, DiscoveryError> {
+        self.gossip.accept(&mut self.engine, advertisement, now)
+    }
+
+    pub fn create_advertisement(
+        &mut self,
+        node_id: NodeId,
+        now: u64,
+    ) -> Result<SignedDiscoveryAdvertisement, DiscoveryError> {
+        let sequence = self.sequence.saturating_add(1);
+        let issued_at = now;
+        let expires_at = now.saturating_add(DISCOVERY_ADVERTISEMENT_TTL_SECONDS);
+        let peers: Vec<_> = self
+            .engine
+            .peers(now)
+            .take(MAX_ADVERTISEMENT_PEERS)
+            .copied()
+            .collect();
+        let services: Vec<_> = self
+            .engine
+            .services(now)
+            .take(MAX_ADVERTISEMENT_SERVICES)
+            .cloned()
+            .collect();
+        let resources: Vec<_> = self
+            .engine
+            .resources(now)
+            .take(MAX_ADVERTISEMENT_RESOURCES)
+            .cloned()
+            .collect();
+        let advertisement = SignedDiscoveryAdvertisement::new(
+            &self.signing_key,
+            node_id,
+            self.signing_key.device_id(),
+            sequence,
+            issued_at,
+            expires_at,
+            &peers,
+            &services,
+            &resources,
+        )
+        .map_err(|_| DiscoveryError::InvalidAdvertisement)?;
+        self.sequence = sequence;
+        Ok(advertisement)
     }
 
     pub fn maintain(&mut self, now: u64) -> usize {
@@ -128,10 +199,8 @@ fn endpoint_hint(address: SocketAddr) -> [u8; 32] {
             hint[0] = 6;
             hint[1..17].copy_from_slice(&value.ip().octets());
             hint[17..19].copy_from_slice(&value.port().to_be_bytes());
-            hint[19] = value.flowinfo() as u8;
-            hint[20] = (value.flowinfo() >> 8) as u8;
-            hint[21] = (value.flowinfo() >> 16) as u8;
-            hint[22] = (value.flowinfo() >> 24) as u8;
+            let flow = value.flowinfo().to_be_bytes();
+            hint[19..23].copy_from_slice(&flow);
             let scope = value.scope_id().to_be_bytes();
             hint[23..27].copy_from_slice(&scope);
         }
@@ -151,9 +220,13 @@ mod tests {
         DeviceId::from_bytes([seed; 32])
     }
 
+    fn key() -> DeviceSigningKey {
+        DeviceSigningKey::generate().unwrap()
+    }
+
     #[test]
     fn bootstrap_is_registered_and_forms_network() {
-        let mut discovery = DiscoveryFormation::new(PhysicalTransport::Ethernet);
+        let mut discovery = DiscoveryFormation::new(PhysicalTransport::Ethernet, key());
         let address = "127.0.0.1:4000".parse().unwrap();
         discovery
             .add_bootstrap(node(1), device(1), address)
@@ -164,7 +237,7 @@ mod tests {
 
     #[test]
     fn observed_peer_transitions_to_connected() {
-        let mut discovery = DiscoveryFormation::new(PhysicalTransport::Ethernet);
+        let mut discovery = DiscoveryFormation::new(PhysicalTransport::Ethernet, key());
         assert!(discovery.observe_peer(node(1), device(1), 10).unwrap());
         assert_eq!(discovery.state(), FormationState::Connected);
         assert_eq!(discovery.peer_count(), 1);
@@ -172,7 +245,7 @@ mod tests {
 
     #[test]
     fn maintenance_is_rate_limited_and_collects_expired_state() {
-        let mut discovery = DiscoveryFormation::new(PhysicalTransport::Ethernet);
+        let mut discovery = DiscoveryFormation::new(PhysicalTransport::Ethernet, key());
         discovery.observe_peer(node(1), device(1), 0).unwrap();
         assert_eq!(discovery.maintain(1), 0);
         assert_eq!(discovery.force_expire(200), 1);
@@ -188,7 +261,7 @@ mod tests {
     #[test]
     fn helper_method_uses_same_endpoint_encoding() {
         let address = "[2001:db8::1]:4242".parse().unwrap();
-        let discovery = DiscoveryFormation::new(PhysicalTransport::Ethernet);
+        let discovery = DiscoveryFormation::new(PhysicalTransport::Ethernet, key());
         assert_eq!(
             DiscoveryFormation::endpoint_hint_for(address),
             endpoint_hint(address)
