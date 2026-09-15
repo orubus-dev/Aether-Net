@@ -121,24 +121,31 @@ impl RoutingControlPlane {
     pub fn local_node(&self) -> NodeId {
         self.local_node
     }
+
     pub fn local_address(&self) -> AetherAddress {
         self.local_address
     }
+
     pub fn l3(&self) -> &AetherL3Engine {
         &self.l3
     }
+
     pub fn l3_mut(&mut self) -> &mut AetherL3Engine {
         &mut self.l3
     }
+
     pub fn peer_count(&self) -> usize {
         self.peers.len()
     }
+
     pub fn route_count(&self) -> usize {
         self.l3.route_count()
     }
+
     pub fn peer(&self, node_id: &NodeId) -> Option<RoutingPeer> {
         self.peers.get(node_id).copied()
     }
+
     pub fn peers(&self) -> impl Iterator<Item = RoutingPeer> + '_ {
         self.peers.values().copied()
     }
@@ -378,6 +385,7 @@ fn l3_metric(metrics: RouteMetrics, priority: TrafficPriority) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     fn key(seed: u8) -> SigningKey {
         SigningKey::from_bytes(&[seed; 32])
     }
@@ -410,12 +418,13 @@ mod tests {
             public_key: key.verifying_key().to_bytes(),
         }
     }
+
     #[test]
     fn signed_advertisement_is_authenticatable() {
-        let k = key(7);
+        let signing_key = key(7);
         let signed = SignedRouteAdvertisement::sign(
             RouteAdvertisement::with_expiry(
-                node_for_key(&k),
+                node_for_key(&signing_key),
                 1,
                 0,
                 100,
@@ -424,67 +433,71 @@ mod tests {
                     metrics: metrics(10),
                 }],
             ),
-            &k,
+            &signing_key,
         );
         assert!(signed.verify());
     }
+
     #[test]
     fn forged_advertisement_is_rejected() {
         let trusted = key(2);
         let attacker = key(3);
-        let mut p = RoutingControlPlane::with_limits(node(1), address(1), 8, 8, 8);
-        p.register_peer(peer(2, &trusted)).unwrap();
+        let mut plane = RoutingControlPlane::with_limits(node(1), address(1), 8, 8, 8);
+        plane.register_peer(peer(2, &trusted)).unwrap();
         let forged = SignedRouteAdvertisement::sign(
             RouteAdvertisement::with_expiry(node_for_key(&trusted), 1, 0, 100, vec![]),
             &attacker,
         );
         assert_eq!(
-            p.accept_advertisement(forged, 10).unwrap_err(),
+            plane.accept_advertisement(forged, 10).unwrap_err(),
             RoutingControlError::OriginKeyMismatch
         );
     }
+
     #[test]
     fn peer_capacity_is_enforced() {
-        let mut p = RoutingControlPlane::with_limits(node(1), address(1), 1, 8, 8);
+        let mut plane = RoutingControlPlane::with_limits(node(1), address(1), 1, 8, 8);
         let k2 = key(2);
         let k3 = key(3);
-        p.register_peer(peer(2, &k2)).unwrap();
+        plane.register_peer(peer(2, &k2)).unwrap();
         assert_eq!(
-            p.register_peer(peer(3, &k3)).unwrap_err(),
+            plane.register_peer(peer(3, &k3)).unwrap_err(),
             RoutingControlError::PeerTableFull
         );
     }
+
     #[test]
     fn local_advertisement_requires_matching_signing_identity() {
-        let k = key(1);
-        let local = node_for_key(&k);
-        let mut p = RoutingControlPlane::with_limits(local, address(1), 8, 8, 8);
-        let k2 = key(2);
-        p.register_peer(peer(2, &k2)).unwrap();
-        assert!(
-            p.local_advertisement(
+        let local_key = key(1);
+        let local = node_for_key(&local_key);
+        let mut plane = RoutingControlPlane::with_limits(local, address(1), 8, 8, 8);
+        let peer_key = key(2);
+        plane.register_peer(peer(2, &peer_key)).unwrap();
+        assert!(plane
+            .local_advertisement(
                 0,
                 vec![RouteNeighbor {
-                    node_id: node_for_key(&k2),
-                    metrics: metrics(10)
+                    node_id: node_for_key(&peer_key),
+                    metrics: metrics(10),
                 }],
-                &k
+                &local_key,
             )
-            .is_ok()
-        );
+            .is_ok());
         assert_eq!(
-            p.local_advertisement(
-                1,
-                vec![RouteNeighbor {
-                    node_id: node_for_key(&k2),
-                    metrics: metrics(10)
-                }],
-                &key(9)
-            )
-            .unwrap_err(),
+            plane
+                .local_advertisement(
+                    1,
+                    vec![RouteNeighbor {
+                        node_id: node_for_key(&peer_key),
+                        metrics: metrics(10),
+                    }],
+                    &key(9),
+                )
+                .unwrap_err(),
             RoutingControlError::InvalidPublicKey
         );
     }
+
     #[test]
     fn remote_origin_is_accepted_and_routes_recompute() {
         let local_key = key(1);
@@ -493,18 +506,19 @@ mod tests {
         let local = node_for_key(&local_key);
         let b = node_for_key(&b_key);
         let c = node_for_key(&c_key);
-        let mut p = RoutingControlPlane::with_limits(local, address(1), 8, 8, 8);
-        p.register_peer(peer(2, &b_key)).unwrap();
-        p.register_peer(peer(3, &c_key)).unwrap();
-        p.install_local_neighbors(
-            1,
-            0,
-            vec![RouteNeighbor {
-                node_id: b,
-                metrics: metrics(10),
-            }],
-        )
-        .unwrap();
+        let mut plane = RoutingControlPlane::with_limits(local, address(1), 8, 8, 8);
+        plane.register_peer(peer(2, &b_key)).unwrap();
+        plane.register_peer(peer(3, &c_key)).unwrap();
+        plane
+            .install_local_neighbors(
+                1,
+                0,
+                vec![RouteNeighbor {
+                    node_id: b,
+                    metrics: metrics(10),
+                }],
+            )
+            .unwrap();
         let ad = SignedRouteAdvertisement::sign(
             RouteAdvertisement::with_expiry(
                 b,
@@ -518,13 +532,13 @@ mod tests {
             ),
             &b_key,
         );
-        p.accept_advertisement(ad, 10).unwrap();
-        assert_eq!(p.recompute(TrafficPriority::Voice, 10).unwrap(), 2);
+        plane.accept_advertisement(ad, 10).unwrap();
+        assert_eq!(plane.recompute(TrafficPriority::Voice, 10).unwrap(), 2);
         assert_eq!(
-            p.l3().lookup_route(address(3), 10).unwrap().next_hop,
+            plane.l3().lookup_route(address(3), 10).unwrap().next_hop,
             address(2)
         );
-        assert_eq!(p.tick(TrafficPriority::Voice, 101).unwrap(), 0);
-        assert!(p.l3().lookup_route(address(3), 101).is_none());
+        assert_eq!(plane.tick(TrafficPriority::Voice, 101).unwrap(), 0);
+        assert!(plane.l3().lookup_route(address(3), 101).is_none());
     }
 }
