@@ -96,9 +96,9 @@ fn validate_domain(domain: &str) -> Result<(), HostingError> {
             || label.len() > 63
             || label.starts_with('-')
             || label.ends_with('-')
-            || !label.chars().all(|character| {
-                character.is_ascii_alphanumeric() || character == '-'
-            })
+            || !label
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || character == '-')
         {
             return Err(HostingError::InvalidDomain);
         }
@@ -141,12 +141,14 @@ mod tests {
 
     #[test]
     fn invalid_domains_are_rejected() {
-        assert!(SiteManifest::new(
-            "not a domain",
-            DeploymentSource::Upload,
-            [0; SITE_ID_LENGTH],
-            "index.html",
-        )
-        .is_err());
+        assert!(
+            SiteManifest::new(
+                "not a domain",
+                DeploymentSource::Upload,
+                [0; SITE_ID_LENGTH],
+                "index.html",
+            )
+            .is_err()
+        );
     }
 }

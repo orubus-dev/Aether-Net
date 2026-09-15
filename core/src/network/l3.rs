@@ -1,4 +1,4 @@
-use super::address::{AetherAddress, AETHER_ADDRESS_LENGTH};
+use super::address::{AETHER_ADDRESS_LENGTH, AetherAddress};
 use super::protocol::TrafficPriority;
 
 pub const L3_MAGIC: [u8; 4] = *b"A3TH";
@@ -107,10 +107,11 @@ impl AetherL3Packet {
         if self.hop_limit == 0 {
             return Err(L3Error::InvalidHopLimit);
         }
-        if self.flags.0 & !(L3Flags::RELAYABLE.0
-            | L3Flags::ACK_REQUIRED.0
-            | L3Flags::FRAGMENT.0
-            | L3Flags::FINAL_FRAGMENT.0)
+        if self.flags.0
+            & !(L3Flags::RELAYABLE.0
+                | L3Flags::ACK_REQUIRED.0
+                | L3Flags::FRAGMENT.0
+                | L3Flags::FINAL_FRAGMENT.0)
             != 0
         {
             return Err(L3Error::InvalidFlags);

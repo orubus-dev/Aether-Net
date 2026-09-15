@@ -1,8 +1,8 @@
 use crate::network::AetherFlowId;
 
 use super::native::{
-    AetherL4Segment, AetherTransportMode, L4Error, L4_FLAG_ACK, L4_FLAG_FIN, L4_FLAG_RESET,
-    L4_FLAG_SYN, MAX_L4_PAYLOAD,
+    AetherL4Segment, AetherTransportMode, L4_FLAG_ACK, L4_FLAG_FIN, L4_FLAG_RESET, L4_FLAG_SYN,
+    L4Error, MAX_L4_PAYLOAD,
 };
 
 pub const DEFAULT_MAX_IN_FLIGHT: usize = 64;
@@ -125,8 +125,10 @@ impl AetherL4Session {
             congestion_window: initial_congestion_window.max(1).min(max_cwnd),
             slow_start_threshold: (max_cwnd / 2).max(1),
             max_congestion_window: max_cwnd,
-            retransmit_timeout_ms: retransmit_timeout_ms
-                .clamp(DEFAULT_MIN_RETRANSMIT_TIMEOUT_MS, DEFAULT_MAX_RETRANSMIT_TIMEOUT_MS),
+            retransmit_timeout_ms: retransmit_timeout_ms.clamp(
+                DEFAULT_MIN_RETRANSMIT_TIMEOUT_MS,
+                DEFAULT_MAX_RETRANSMIT_TIMEOUT_MS,
+            ),
             mss: 1200,
         }
     }
@@ -219,7 +221,10 @@ impl AetherL4Session {
             return Err(L4SendError::InvalidPayload);
         }
 
-        if matches!(self.mode, AetherTransportMode::Stream | AetherTransportMode::ReliableStream) {
+        if matches!(
+            self.mode,
+            AetherTransportMode::Stream | AetherTransportMode::ReliableStream
+        ) {
             if self.outstanding.len() >= self.max_in_flight {
                 return Err(L4SendError::InFlightLimit);
             }
@@ -235,7 +240,10 @@ impl AetherL4Session {
             .checked_add(1)
             .ok_or(L4SendError::SequenceExhausted)?;
 
-        let flags = if matches!(self.mode, AetherTransportMode::Stream | AetherTransportMode::ReliableStream) {
+        let flags = if matches!(
+            self.mode,
+            AetherTransportMode::Stream | AetherTransportMode::ReliableStream
+        ) {
             L4_FLAG_ACK
         } else {
             0
@@ -252,7 +260,10 @@ impl AetherL4Session {
         )
         .map_err(L4SendError::Segment)?;
 
-        if matches!(self.mode, AetherTransportMode::Stream | AetherTransportMode::ReliableStream) {
+        if matches!(
+            self.mode,
+            AetherTransportMode::Stream | AetherTransportMode::ReliableStream
+        ) {
             self.outstanding.push(OutstandingSegment {
                 payload_len: segment.payload.len(),
                 segment: segment.clone(),
@@ -389,7 +400,10 @@ impl AetherL4Session {
     }
 
     pub fn due_retransmissions(&mut self, now_ms: u64) -> Vec<AetherL4Segment> {
-        if !matches!(self.mode, AetherTransportMode::Stream | AetherTransportMode::ReliableStream) {
+        if !matches!(
+            self.mode,
+            AetherTransportMode::Stream | AetherTransportMode::ReliableStream
+        ) {
             return Vec::new();
         }
 
@@ -432,7 +446,11 @@ impl AetherL4Session {
         .map_err(L4ReceiveError::Segment)
     }
 
-    fn make_control_segment(&self, flags: u8, _now_ms: u64) -> Result<AetherL4Segment, L4SendError> {
+    fn make_control_segment(
+        &self,
+        flags: u8,
+        _now_ms: u64,
+    ) -> Result<AetherL4Segment, L4SendError> {
         AetherL4Segment::new(
             self.flow_id,
             self.mode,
@@ -518,14 +536,35 @@ mod tests {
             b"hello".to_vec(),
         )
         .unwrap();
-        assert_eq!(AetherL4Segment::decode(&segment.encode().unwrap()).unwrap(), segment);
+        assert_eq!(
+            AetherL4Segment::decode(&segment.encode().unwrap()).unwrap(),
+            segment
+        );
     }
 
     #[test]
     fn reliable_stream_reorders_and_drains() {
         let mut receiver = AetherL4Session::new(flow(), AetherTransportMode::ReliableStream);
-        let second = AetherL4Segment::new(flow(), AetherTransportMode::ReliableStream, 1, 0, 8192, 0, b"b".to_vec()).unwrap();
-        let first = AetherL4Segment::new(flow(), AetherTransportMode::ReliableStream, 0, 0, 8192, 0, b"a".to_vec()).unwrap();
+        let second = AetherL4Segment::new(
+            flow(),
+            AetherTransportMode::ReliableStream,
+            1,
+            0,
+            8192,
+            0,
+            b"b".to_vec(),
+        )
+        .unwrap();
+        let first = AetherL4Segment::new(
+            flow(),
+            AetherTransportMode::ReliableStream,
+            0,
+            0,
+            8192,
+            0,
+            b"a".to_vec(),
+        )
+        .unwrap();
 
         assert!(receiver.receive(second).unwrap().0.is_empty());
         let (delivered, ack) = receiver.receive(first).unwrap();
@@ -556,8 +595,26 @@ mod tests {
     #[test]
     fn realtime_drops_stale_packets() {
         let mut receiver = AetherL4Session::new(flow(), AetherTransportMode::Realtime);
-        let newer = AetherL4Segment::new(flow(), AetherTransportMode::Realtime, 10, 0, 0, 0, b"new".to_vec()).unwrap();
-        let older = AetherL4Segment::new(flow(), AetherTransportMode::Realtime, 9, 0, 0, 0, b"old".to_vec()).unwrap();
+        let newer = AetherL4Segment::new(
+            flow(),
+            AetherTransportMode::Realtime,
+            10,
+            0,
+            0,
+            0,
+            b"new".to_vec(),
+        )
+        .unwrap();
+        let older = AetherL4Segment::new(
+            flow(),
+            AetherTransportMode::Realtime,
+            9,
+            0,
+            0,
+            0,
+            b"old".to_vec(),
+        )
+        .unwrap();
         assert_eq!(receiver.receive(newer).unwrap().0, vec![b"new".to_vec()]);
         assert!(receiver.receive(older).unwrap().0.is_empty());
     }

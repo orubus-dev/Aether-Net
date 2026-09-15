@@ -25,7 +25,9 @@ impl NativeAetherDataPlane {
         session: &mut LinkSession,
         frame: &[u8],
     ) -> Result<AetherL3Packet, NativeDataPlaneError> {
-        let decrypted = session.decrypt(frame).map_err(NativeDataPlaneError::Frame)?;
+        let decrypted = session
+            .decrypt(frame)
+            .map_err(NativeDataPlaneError::Frame)?;
         if decrypted.message_type != MessageType::Data {
             return Err(NativeDataPlaneError::UnexpectedMessage);
         }

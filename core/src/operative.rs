@@ -9,21 +9,287 @@ pub const DEFAULT_MAX_IN_FLIGHT_PACKETS: usize = 4_096;
 pub const DEFAULT_MAX_TRANSFER_BYTES: u64 = 1 << 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BandwidthLimits { pub upload_bps: u64, pub download_bps: u64 }
-impl BandwidthLimits { pub fn new(upload_bps:u64,download_bps:u64)->Self{Self{upload_bps,download_bps}} pub fn defaults()->Self{Self::new(DEFAULT_UPLOAD_BPS,DEFAULT_DOWNLOAD_BPS)} }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub struct AetherPacketBudget{pub max_payload_bytes:usize,pub max_in_flight:usize}
-impl Default for AetherPacketBudget{fn default()->Self{Self{max_payload_bytes:DEFAULT_MAX_PACKET_BYTES,max_in_flight:DEFAULT_MAX_IN_FLIGHT_PACKETS}}}
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)] pub enum TransferDirection{Upload,Download}
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)] pub struct TransferId([u8;32]);
-impl TransferId{pub fn derive(content:ContentId,peer:NodeId,direction:TransferDirection,nonce:u64)->Self{use sha2::{Digest,Sha256};let mut h=Sha256::new();h.update(b"aether:transfer:v1:");h.update(content.as_bytes());h.update(peer.as_bytes());h.update([match direction{TransferDirection::Upload=>1,TransferDirection::Download=>2}]);h.update(nonce.to_be_bytes());Self(h.finalize().into())}pub fn as_bytes(&self)->&[u8;32]{&self.0}}
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub struct DataPacket{pub transfer:TransferId,pub content:ContentId,pub chunk:ChunkId,pub packet_index:u32,pub payload_len:u16,pub final_packet:bool}
-impl DataPacket{pub fn validate(&self,budget:AetherPacketBudget)->bool{self.payload_len>0&&(self.payload_len as usize)<=budget.max_payload_bytes}}
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum OperativeError{InvalidLimits,TransferCapacityExceeded,InvalidPacket,TransferTooLarge,NoTransfer}
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub struct TransferState{pub id:TransferId,pub direction:TransferDirection,pub total_bytes:u64,pub transferred_bytes:u64,pub started_at:u64,pub last_activity:u64}
-pub struct BandwidthGovernor{limits:BandwidthLimits,upload_used:u64,download_used:u64,window_started_at:u64}
-impl BandwidthGovernor{pub fn new(limits:BandwidthLimits,now:u64)->Result<Self,OperativeError>{if limits.upload_bps==0||limits.download_bps==0{return Err(OperativeError::InvalidLimits)}Ok(Self{limits,upload_used:0,download_used:0,window_started_at:now})}pub fn limits(&self)->BandwidthLimits{self.limits}fn refresh(&mut self,now:u64){if now>self.window_started_at{self.upload_used=0;self.download_used=0;self.window_started_at=now}}pub fn remaining(&mut self,direction:TransferDirection,now:u64)->u64{self.refresh(now);let cap=match direction{TransferDirection::Upload=>self.limits.upload_bps,TransferDirection::Download=>self.limits.download_bps};let used=match direction{TransferDirection::Upload=>self.upload_used,TransferDirection::Download=>self.download_used};cap.saturating_sub(used)}pub fn consume(&mut self,direction:TransferDirection,bytes:u64,now:u64)->bool{if bytes==0||bytes>self.remaining(direction,now){return false}match direction{TransferDirection::Upload=>self.upload_used+=bytes,TransferDirection::Download=>self.download_used+=bytes}true}}
-#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub struct OperativeProfile{pub node:NodeId,pub capabilities:PhysicalCapabilities,pub bandwidth:BandwidthLimits,pub packet_budget:AetherPacketBudget}
-pub struct AetherOperative{profile:OperativeProfile,governor:BandwidthGovernor,max_transfers:usize,max_transfer_bytes:u64,transfers:Vec<TransferState>}
-impl AetherOperative{pub fn new(profile:OperativeProfile,now:u64)->Result<Self,OperativeError>{Ok(Self{governor:BandwidthGovernor::new(profile.bandwidth,now)?,profile,max_transfers:DEFAULT_MAX_IN_FLIGHT_PACKETS,max_transfer_bytes:DEFAULT_MAX_TRANSFER_BYTES,transfers:Vec::new()})}pub fn profile(&self)->OperativeProfile{self.profile}pub fn transfer_count(&self)->usize{self.transfers.len()}pub fn start_transfer(&mut self,id:TransferId,direction:TransferDirection,total_bytes:u64,now:u64)->Result<(),OperativeError>{if total_bytes==0||total_bytes>self.max_transfer_bytes{return Err(OperativeError::TransferTooLarge)}if self.transfers.len()>=self.max_transfers{return Err(OperativeError::TransferCapacityExceeded)}self.transfers.push(TransferState{id,direction,total_bytes,transferred_bytes:0,started_at:now,last_activity:now});Ok(())}pub fn schedule_packet(&mut self,transfer:TransferId,payload_bytes:usize,now:u64)->Result<bool,OperativeError>{if payload_bytes==0||payload_bytes>self.profile.packet_budget.max_payload_bytes{return Err(OperativeError::InvalidPacket)}let state=self.transfers.iter_mut().find(|t|t.id==transfer).ok_or(OperativeError::NoTransfer)?;if state.transferred_bytes.saturating_add(payload_bytes as u64)>state.total_bytes{return Err(OperativeError::InvalidPacket)}if !self.governor.consume(state.direction,payload_bytes as u64,now){return Ok(false)}state.transferred_bytes+=payload_bytes as u64;state.last_activity=now;Ok(true)}pub fn complete_transfer(&mut self,id:TransferId)->Result<bool,OperativeError>{if let Some(index)=self.transfers.iter().position(|t|t.id==id){self.transfers.swap_remove(index);return Ok(true)}Err(OperativeError::NoTransfer)}}
+pub struct BandwidthLimits {
+    pub upload_bps: u64,
+    pub download_bps: u64,
+}
+impl BandwidthLimits {
+    pub fn new(upload_bps: u64, download_bps: u64) -> Self {
+        Self {
+            upload_bps,
+            download_bps,
+        }
+    }
+    pub fn defaults() -> Self {
+        Self::new(DEFAULT_UPLOAD_BPS, DEFAULT_DOWNLOAD_BPS)
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AetherPacketBudget {
+    pub max_payload_bytes: usize,
+    pub max_in_flight: usize,
+}
+impl Default for AetherPacketBudget {
+    fn default() -> Self {
+        Self {
+            max_payload_bytes: DEFAULT_MAX_PACKET_BYTES,
+            max_in_flight: DEFAULT_MAX_IN_FLIGHT_PACKETS,
+        }
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TransferDirection {
+    Upload,
+    Download,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TransferId([u8; 32]);
+impl TransferId {
+    pub fn derive(
+        content: ContentId,
+        peer: NodeId,
+        direction: TransferDirection,
+        nonce: u64,
+    ) -> Self {
+        use sha2::{Digest, Sha256};
+        let mut h = Sha256::new();
+        h.update(b"aether:transfer:v1:");
+        h.update(content.as_bytes());
+        h.update(peer.as_bytes());
+        h.update([match direction {
+            TransferDirection::Upload => 1,
+            TransferDirection::Download => 2,
+        }]);
+        h.update(nonce.to_be_bytes());
+        Self(h.finalize().into())
+    }
+    pub fn as_bytes(&self) -> &[u8; 32] {
+        &self.0
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DataPacket {
+    pub transfer: TransferId,
+    pub content: ContentId,
+    pub chunk: ChunkId,
+    pub packet_index: u32,
+    pub payload_len: u16,
+    pub final_packet: bool,
+}
+impl DataPacket {
+    pub fn validate(&self, budget: AetherPacketBudget) -> bool {
+        self.payload_len > 0 && (self.payload_len as usize) <= budget.max_payload_bytes
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OperativeError {
+    InvalidLimits,
+    TransferCapacityExceeded,
+    InvalidPacket,
+    TransferTooLarge,
+    NoTransfer,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TransferState {
+    pub id: TransferId,
+    pub direction: TransferDirection,
+    pub total_bytes: u64,
+    pub transferred_bytes: u64,
+    pub started_at: u64,
+    pub last_activity: u64,
+}
+pub struct BandwidthGovernor {
+    limits: BandwidthLimits,
+    upload_used: u64,
+    download_used: u64,
+    window_started_at: u64,
+}
+impl BandwidthGovernor {
+    pub fn new(limits: BandwidthLimits, now: u64) -> Result<Self, OperativeError> {
+        if limits.upload_bps == 0 || limits.download_bps == 0 {
+            return Err(OperativeError::InvalidLimits);
+        }
+        Ok(Self {
+            limits,
+            upload_used: 0,
+            download_used: 0,
+            window_started_at: now,
+        })
+    }
+    pub fn limits(&self) -> BandwidthLimits {
+        self.limits
+    }
+    fn refresh(&mut self, now: u64) {
+        if now > self.window_started_at {
+            self.upload_used = 0;
+            self.download_used = 0;
+            self.window_started_at = now
+        }
+    }
+    pub fn remaining(&mut self, direction: TransferDirection, now: u64) -> u64 {
+        self.refresh(now);
+        let cap = match direction {
+            TransferDirection::Upload => self.limits.upload_bps,
+            TransferDirection::Download => self.limits.download_bps,
+        };
+        let used = match direction {
+            TransferDirection::Upload => self.upload_used,
+            TransferDirection::Download => self.download_used,
+        };
+        cap.saturating_sub(used)
+    }
+    pub fn consume(&mut self, direction: TransferDirection, bytes: u64, now: u64) -> bool {
+        if bytes == 0 || bytes > self.remaining(direction, now) {
+            return false;
+        }
+        match direction {
+            TransferDirection::Upload => self.upload_used += bytes,
+            TransferDirection::Download => self.download_used += bytes,
+        }
+        true
+    }
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OperativeProfile {
+    pub node: NodeId,
+    pub capabilities: PhysicalCapabilities,
+    pub bandwidth: BandwidthLimits,
+    pub packet_budget: AetherPacketBudget,
+}
+pub struct AetherOperative {
+    profile: OperativeProfile,
+    governor: BandwidthGovernor,
+    max_transfers: usize,
+    max_transfer_bytes: u64,
+    transfers: Vec<TransferState>,
+}
+impl AetherOperative {
+    pub fn new(profile: OperativeProfile, now: u64) -> Result<Self, OperativeError> {
+        Ok(Self {
+            governor: BandwidthGovernor::new(profile.bandwidth, now)?,
+            profile,
+            max_transfers: DEFAULT_MAX_IN_FLIGHT_PACKETS,
+            max_transfer_bytes: DEFAULT_MAX_TRANSFER_BYTES,
+            transfers: Vec::new(),
+        })
+    }
+    pub fn profile(&self) -> OperativeProfile {
+        self.profile
+    }
+    pub fn transfer_count(&self) -> usize {
+        self.transfers.len()
+    }
+    pub fn start_transfer(
+        &mut self,
+        id: TransferId,
+        direction: TransferDirection,
+        total_bytes: u64,
+        now: u64,
+    ) -> Result<(), OperativeError> {
+        if total_bytes == 0 || total_bytes > self.max_transfer_bytes {
+            return Err(OperativeError::TransferTooLarge);
+        }
+        if self.transfers.len() >= self.max_transfers {
+            return Err(OperativeError::TransferCapacityExceeded);
+        }
+        self.transfers.push(TransferState {
+            id,
+            direction,
+            total_bytes,
+            transferred_bytes: 0,
+            started_at: now,
+            last_activity: now,
+        });
+        Ok(())
+    }
+    pub fn schedule_packet(
+        &mut self,
+        transfer: TransferId,
+        payload_bytes: usize,
+        now: u64,
+    ) -> Result<bool, OperativeError> {
+        if payload_bytes == 0 || payload_bytes > self.profile.packet_budget.max_payload_bytes {
+            return Err(OperativeError::InvalidPacket);
+        }
+        let state = self
+            .transfers
+            .iter_mut()
+            .find(|t| t.id == transfer)
+            .ok_or(OperativeError::NoTransfer)?;
+        if state.transferred_bytes.saturating_add(payload_bytes as u64) > state.total_bytes {
+            return Err(OperativeError::InvalidPacket);
+        }
+        if !self
+            .governor
+            .consume(state.direction, payload_bytes as u64, now)
+        {
+            return Ok(false);
+        }
+        state.transferred_bytes += payload_bytes as u64;
+        state.last_activity = now;
+        Ok(true)
+    }
+    pub fn complete_transfer(&mut self, id: TransferId) -> Result<bool, OperativeError> {
+        if let Some(index) = self.transfers.iter().position(|t| t.id == id) {
+            self.transfers.swap_remove(index);
+            return Ok(true);
+        }
+        Err(OperativeError::NoTransfer)
+    }
+}
 
-#[cfg(test)]mod tests{use super::*;fn node(seed:u8)->NodeId{NodeId::from_bytes([seed;32])}fn content(seed:u8)->ContentId{ContentId::from_bytes(&[seed;8])}#[test]fn asymmetric_limits_are_enforced(){let limits=BandwidthLimits::new(2_000_000/8,10_000_000/8);let mut g=BandwidthGovernor::new(limits,0).unwrap();assert!(g.consume(TransferDirection::Upload,250_000,0));assert!(!g.consume(TransferDirection::Upload,1,0));assert!(g.consume(TransferDirection::Download,1_000_000,0));}#[test]fn transfer_progress_is_packetized(){let profile=OperativeProfile{node:node(1),capabilities:PhysicalCapabilities::empty(),bandwidth:BandwidthLimits::new(2_000_000/8,10_000_000/8),packet_budget:AetherPacketBudget{max_payload_bytes:1_000,max_in_flight:16}};let mut op=AetherOperative::new(profile,0).unwrap();let id=TransferId::derive(content(1),node(2),TransferDirection::Upload,7);op.start_transfer(id,TransferDirection::Upload,2_000,0).unwrap();assert!(op.schedule_packet(id,1_000,0).unwrap());assert!(op.schedule_packet(id,1_000,0).unwrap());assert_eq!(op.complete_transfer(id).unwrap(),true);}#[test]fn packet_budget_rejects_oversized_payload(){let profile=OperativeProfile{node:node(1),capabilities:PhysicalCapabilities::empty(),bandwidth:BandwidthLimits::defaults(),packet_budget:AetherPacketBudget::default()};let mut op=AetherOperative::new(profile,0).unwrap();let id=TransferId::derive(content(1),node(2),TransferDirection::Download,1);op.start_transfer(id,TransferDirection::Download,5_000,0).unwrap();assert_eq!(op.schedule_packet(id,DEFAULT_MAX_PACKET_BYTES+1,0).unwrap_err(),OperativeError::InvalidPacket);}}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn node(seed: u8) -> NodeId {
+        NodeId::from_bytes([seed; 32])
+    }
+    fn content(seed: u8) -> ContentId {
+        ContentId::from_bytes(&[seed; 8])
+    }
+    #[test]
+    fn asymmetric_limits_are_enforced() {
+        let limits = BandwidthLimits::new(2_000_000 / 8, 10_000_000 / 8);
+        let mut g = BandwidthGovernor::new(limits, 0).unwrap();
+        assert!(g.consume(TransferDirection::Upload, 250_000, 0));
+        assert!(!g.consume(TransferDirection::Upload, 1, 0));
+        assert!(g.consume(TransferDirection::Download, 1_000_000, 0));
+    }
+    #[test]
+    fn transfer_progress_is_packetized() {
+        let profile = OperativeProfile {
+            node: node(1),
+            capabilities: PhysicalCapabilities::empty(),
+            bandwidth: BandwidthLimits::new(2_000_000 / 8, 10_000_000 / 8),
+            packet_budget: AetherPacketBudget {
+                max_payload_bytes: 1_000,
+                max_in_flight: 16,
+            },
+        };
+        let mut op = AetherOperative::new(profile, 0).unwrap();
+        let id = TransferId::derive(content(1), node(2), TransferDirection::Upload, 7);
+        op.start_transfer(id, TransferDirection::Upload, 2_000, 0)
+            .unwrap();
+        assert!(op.schedule_packet(id, 1_000, 0).unwrap());
+        assert!(op.schedule_packet(id, 1_000, 0).unwrap());
+        assert_eq!(op.complete_transfer(id).unwrap(), true);
+    }
+    #[test]
+    fn packet_budget_rejects_oversized_payload() {
+        let profile = OperativeProfile {
+            node: node(1),
+            capabilities: PhysicalCapabilities::empty(),
+            bandwidth: BandwidthLimits::defaults(),
+            packet_budget: AetherPacketBudget::default(),
+        };
+        let mut op = AetherOperative::new(profile, 0).unwrap();
+        let id = TransferId::derive(content(1), node(2), TransferDirection::Download, 1);
+        op.start_transfer(id, TransferDirection::Download, 5_000, 0)
+            .unwrap();
+        assert_eq!(
+            op.schedule_packet(id, DEFAULT_MAX_PACKET_BYTES + 1, 0)
+                .unwrap_err(),
+            OperativeError::InvalidPacket
+        );
+    }
+}

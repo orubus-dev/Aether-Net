@@ -1,7 +1,7 @@
+pub mod policy;
 pub mod privacy;
 pub mod replay;
-pub mod policy;
 
-pub use privacy::{PrivacyContext, PrivacyError, PrivacyToken, PRIVACY_TOKEN_LENGTH};
-pub use replay::{ReplayError, ReplayWindow, DEFAULT_REPLAY_WINDOW};
 pub use policy::{SecurityPolicy, SecurityProfile};
+pub use privacy::{PRIVACY_TOKEN_LENGTH, PrivacyContext, PrivacyError, PrivacyToken};
+pub use replay::{DEFAULT_REPLAY_WINDOW, ReplayError, ReplayWindow};

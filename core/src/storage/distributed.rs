@@ -84,9 +84,15 @@ impl ChunkStore {
         }
     }
 
-    pub fn max_bytes(&self) -> u64 { self.max_bytes }
-    pub fn used_bytes(&self) -> u64 { self.used_bytes }
-    pub fn chunk_count(&self) -> usize { self.chunks.len() }
+    pub fn max_bytes(&self) -> u64 {
+        self.max_bytes
+    }
+    pub fn used_bytes(&self) -> u64 {
+        self.used_bytes
+    }
+    pub fn chunk_count(&self) -> usize {
+        self.chunks.len()
+    }
 
     pub fn put(
         &mut self,
@@ -104,7 +110,11 @@ impl ChunkStore {
         }
 
         let digest = ChunkDigest::of(content, chunk, bytes);
-        if let Some(existing) = self.chunks.iter_mut().find(|item| item.content == content && item.chunk == chunk) {
+        if let Some(existing) = self
+            .chunks
+            .iter_mut()
+            .find(|item| item.content == content && item.chunk == chunk)
+        {
             self.used_bytes = self.used_bytes.saturating_sub(existing.bytes.len() as u64);
             if self.used_bytes.saturating_add(bytes.len() as u64) > self.max_bytes {
                 return Err(StorageError::CapacityExceeded);
@@ -118,7 +128,9 @@ impl ChunkStore {
             return Ok(digest);
         }
 
-        if self.chunks.len() >= self.max_chunks || self.used_bytes.saturating_add(bytes.len() as u64) > self.max_bytes {
+        if self.chunks.len() >= self.max_chunks
+            || self.used_bytes.saturating_add(bytes.len() as u64) > self.max_bytes
+        {
             return Err(StorageError::CapacityExceeded);
         }
 
@@ -134,8 +146,18 @@ impl ChunkStore {
         Ok(digest)
     }
 
-    pub fn get(&self, content: ContentId, chunk: ChunkId, expected: Option<ChunkDigest>, now: u64) -> Result<&[u8], StorageError> {
-        let item = self.chunks.iter().find(|item| item.content == content && item.chunk == chunk && item.is_valid_at(now)).ok_or(StorageError::ChunkNotFound)?;
+    pub fn get(
+        &self,
+        content: ContentId,
+        chunk: ChunkId,
+        expected: Option<ChunkDigest>,
+        now: u64,
+    ) -> Result<&[u8], StorageError> {
+        let item = self
+            .chunks
+            .iter()
+            .find(|item| item.content == content && item.chunk == chunk && item.is_valid_at(now))
+            .ok_or(StorageError::ChunkNotFound)?;
         let actual = ChunkDigest::of(item.content, item.chunk, &item.bytes);
         if actual != item.digest || expected.is_some_and(|value| value != actual) {
             return Err(StorageError::ChunkIntegrityFailure);
@@ -152,7 +174,9 @@ impl ChunkStore {
 }
 
 impl Default for ChunkStore {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -175,25 +199,64 @@ pub struct ManifestStore {
 }
 
 impl ManifestStore {
-    pub fn new() -> Self { Self::with_limit(DEFAULT_MAX_MANIFESTS) }
-    pub fn with_limit(max_manifests: usize) -> Self { Self { max_manifests: max_manifests.max(1), manifests: Vec::new() } }
-    pub fn len(&self) -> usize { self.manifests.len() }
-    pub fn is_empty(&self) -> bool { self.manifests.is_empty() }
+    pub fn new() -> Self {
+        Self::with_limit(DEFAULT_MAX_MANIFESTS)
+    }
+    pub fn with_limit(max_manifests: usize) -> Self {
+        Self {
+            max_manifests: max_manifests.max(1),
+            manifests: Vec::new(),
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.manifests.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.manifests.is_empty()
+    }
 
-    pub fn publish(&mut self, manifest: ContentManifest, version: u64, now: u64, expires_at: u64) -> Result<bool, StorageError> {
-        if !manifest.validate() || expires_at <= now { return Err(StorageError::InvalidManifest); }
-        if let Some(existing) = self.manifests.iter_mut().find(|item| item.manifest.content == manifest.content) {
-            if version < existing.version { return Ok(false); }
-            *existing = StoredManifest { manifest, version, published_at: now, expires_at };
+    pub fn publish(
+        &mut self,
+        manifest: ContentManifest,
+        version: u64,
+        now: u64,
+        expires_at: u64,
+    ) -> Result<bool, StorageError> {
+        if !manifest.validate() || expires_at <= now {
+            return Err(StorageError::InvalidManifest);
+        }
+        if let Some(existing) = self
+            .manifests
+            .iter_mut()
+            .find(|item| item.manifest.content == manifest.content)
+        {
+            if version < existing.version {
+                return Ok(false);
+            }
+            *existing = StoredManifest {
+                manifest,
+                version,
+                published_at: now,
+                expires_at,
+            };
             return Ok(true);
         }
-        if self.manifests.len() >= self.max_manifests { return Err(StorageError::ManifestCapacityExceeded); }
-        self.manifests.push(StoredManifest { manifest, version, published_at: now, expires_at });
+        if self.manifests.len() >= self.max_manifests {
+            return Err(StorageError::ManifestCapacityExceeded);
+        }
+        self.manifests.push(StoredManifest {
+            manifest,
+            version,
+            published_at: now,
+            expires_at,
+        });
         Ok(true)
     }
 
     pub fn get(&self, content: ContentId, now: u64) -> Option<&StoredManifest> {
-        self.manifests.iter().find(|item| item.manifest.content == content && item.is_valid_at(now))
+        self.manifests
+            .iter()
+            .find(|item| item.manifest.content == content && item.is_valid_at(now))
     }
 
     pub fn expire(&mut self, now: u64) -> usize {
@@ -204,7 +267,9 @@ impl ManifestStore {
 }
 
 impl Default for ManifestStore {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -239,10 +304,17 @@ impl ProviderAdvertisement {
     }
 
     pub fn verify(&self, now: u64) -> bool {
-        if self.expires_at <= self.observed_at || now >= self.expires_at || self.cached_bytes > self.capacity_bytes || self.reliability_ppm > 1_000_000 {
+        if self.expires_at <= self.observed_at
+            || now >= self.expires_at
+            || self.cached_bytes > self.capacity_bytes
+            || self.reliability_ppm > 1_000_000
+        {
             return false;
         }
-        let key = match VerifyingKey::from_bytes(&self.owner_public_key) { Ok(key) => key, Err(_) => return false };
+        let key = match VerifyingKey::from_bytes(&self.owner_public_key) {
+            Ok(key) => key,
+            Err(_) => return false,
+        };
         verify_bytes(&key, &self.signing_bytes(), &self.signature)
     }
 }
@@ -253,31 +325,69 @@ pub struct ProviderDirectory {
 }
 
 impl ProviderDirectory {
-    pub fn new() -> Self { Self::with_limit(DEFAULT_MAX_PROVIDERS) }
-    pub fn with_limit(max_providers: usize) -> Self { Self { max_providers: max_providers.max(1), providers: Vec::new() } }
-    pub fn len(&self) -> usize { self.providers.len() }
-    pub fn is_empty(&self) -> bool { self.providers.is_empty() }
+    pub fn new() -> Self {
+        Self::with_limit(DEFAULT_MAX_PROVIDERS)
+    }
+    pub fn with_limit(max_providers: usize) -> Self {
+        Self {
+            max_providers: max_providers.max(1),
+            providers: Vec::new(),
+        }
+    }
+    pub fn len(&self) -> usize {
+        self.providers.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.providers.is_empty()
+    }
 
-    pub fn publish(&mut self, advertisement: ProviderAdvertisement, now: u64) -> Result<bool, StorageError> {
-        if !advertisement.verify(now) { return Err(StorageError::InvalidProviderAdvertisement); }
-        if let Some(existing) = self.providers.iter_mut().find(|item| item.content == advertisement.content && item.provider == advertisement.provider) {
-            if advertisement.version < existing.version { return Ok(false); }
+    pub fn publish(
+        &mut self,
+        advertisement: ProviderAdvertisement,
+        now: u64,
+    ) -> Result<bool, StorageError> {
+        if !advertisement.verify(now) {
+            return Err(StorageError::InvalidProviderAdvertisement);
+        }
+        if let Some(existing) = self.providers.iter_mut().find(|item| {
+            item.content == advertisement.content && item.provider == advertisement.provider
+        }) {
+            if advertisement.version < existing.version {
+                return Ok(false);
+            }
             *existing = advertisement;
             return Ok(true);
         }
-        if self.providers.len() >= self.max_providers { return Err(StorageError::ProviderCapacityExceeded); }
+        if self.providers.len() >= self.max_providers {
+            return Err(StorageError::ProviderCapacityExceeded);
+        }
         self.providers.push(advertisement);
         Ok(true)
     }
 
-    pub fn providers_for(&self, content: ContentId, now: u64) -> impl Iterator<Item = &ProviderAdvertisement> {
-        self.providers.iter().filter(move |item| item.content == content && item.verify(now))
+    pub fn providers_for(
+        &self,
+        content: ContentId,
+        now: u64,
+    ) -> impl Iterator<Item = &ProviderAdvertisement> {
+        self.providers
+            .iter()
+            .filter(move |item| item.content == content && item.verify(now))
     }
 
     pub fn select(&self, content: ContentId, now: u64, limit: usize) -> Vec<NodeId> {
-        let mut candidates: Vec<&ProviderAdvertisement> = self.providers_for(content, now).collect();
-        candidates.sort_by(|a, b| provider_score(b).cmp(&provider_score(a)).then_with(|| a.provider.as_bytes().cmp(b.provider.as_bytes())));
-        candidates.into_iter().take(limit.max(1)).map(|item| item.provider).collect()
+        let mut candidates: Vec<&ProviderAdvertisement> =
+            self.providers_for(content, now).collect();
+        candidates.sort_by(|a, b| {
+            provider_score(b)
+                .cmp(&provider_score(a))
+                .then_with(|| a.provider.as_bytes().cmp(b.provider.as_bytes()))
+        });
+        candidates
+            .into_iter()
+            .take(limit.max(1))
+            .map(|item| item.provider)
+            .collect()
     }
 
     pub fn expire(&mut self, now: u64) -> usize {
@@ -288,14 +398,20 @@ impl ProviderDirectory {
 }
 
 impl Default for ProviderDirectory {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 fn provider_score(provider: &ProviderAdvertisement) -> u64 {
-    let free = provider.capacity_bytes.saturating_sub(provider.cached_bytes);
+    let free = provider
+        .capacity_bytes
+        .saturating_sub(provider.cached_bytes);
     let reliability = provider.reliability_ppm as u64;
     let cost_penalty = provider.cost_micros.min(1_000_000_000);
-    free.saturating_div(1024).saturating_add(reliability).saturating_sub(cost_penalty)
+    free.saturating_div(1024)
+        .saturating_add(reliability)
+        .saturating_sub(cost_penalty)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -314,10 +430,19 @@ pub struct DistributedStorage {
 
 impl DistributedStorage {
     pub fn new() -> Self {
-        Self { chunks: ChunkStore::new(), manifests: ManifestStore::new(), providers: ProviderDirectory::new() }
+        Self {
+            chunks: ChunkStore::new(),
+            manifests: ManifestStore::new(),
+            providers: ProviderDirectory::new(),
+        }
     }
 
-    pub fn repair_plan(&self, content: ContentId, now: u64, required_replicas: usize) -> Result<RepairPlan, StorageError> {
+    pub fn repair_plan(
+        &self,
+        content: ContentId,
+        now: u64,
+        required_replicas: usize,
+    ) -> Result<RepairPlan, StorageError> {
         let required = required_replicas.max(1);
         let selected = self.providers.select(content, now, required);
         Ok(RepairPlan {
@@ -330,7 +455,9 @@ impl DistributedStorage {
 }
 
 impl Default for DistributedStorage {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -338,9 +465,15 @@ mod tests {
     use super::*;
     use ed25519_dalek::{Signer, SigningKey};
 
-    fn content(seed: u8) -> ContentId { ContentId::from_bytes(&[seed; 8]) }
-    fn node(seed: u8) -> NodeId { NodeId::from_bytes([seed; 32]) }
-    fn chunk() -> Vec<u8> { vec![7u8; MIN_CHUNK_SIZE] }
+    fn content(seed: u8) -> ContentId {
+        ContentId::from_bytes(&[seed; 8])
+    }
+    fn node(seed: u8) -> NodeId {
+        NodeId::from_bytes([seed; 32])
+    }
+    fn chunk() -> Vec<u8> {
+        vec![7u8; MIN_CHUNK_SIZE]
+    }
 
     fn provider(seed: u8, signing: &SigningKey, now: u64, version: u64) -> ProviderAdvertisement {
         let mut advertisement = ProviderAdvertisement {
@@ -369,13 +502,26 @@ mod tests {
         assert_eq!(store.chunk_count(), 1);
         assert_eq!(store.put(id, ChunkId(0), &bytes, 20, 120).unwrap(), digest);
         assert_eq!(store.chunk_count(), 1);
-        assert_eq!(store.get(id, ChunkId(0), Some(digest), 30).unwrap(), bytes.as_slice());
+        assert_eq!(
+            store.get(id, ChunkId(0), Some(digest), 30).unwrap(),
+            bytes.as_slice()
+        );
     }
 
     #[test]
     fn manifest_versions_converge_monotonically() {
         let mut store = ManifestStore::new();
-        let manifest = ContentManifest { content: content(2), total_size: MIN_CHUNK_SIZE as u64, chunk_size: MIN_CHUNK_SIZE as u32, chunks: vec![crate::storage::chunk::ContentChunk { id: ChunkId(0), content: content(2), offset: 0, length: MIN_CHUNK_SIZE as u32 }] };
+        let manifest = ContentManifest {
+            content: content(2),
+            total_size: MIN_CHUNK_SIZE as u64,
+            chunk_size: MIN_CHUNK_SIZE as u32,
+            chunks: vec![crate::storage::chunk::ContentChunk {
+                id: ChunkId(0),
+                content: content(2),
+                offset: 0,
+                length: MIN_CHUNK_SIZE as u32,
+            }],
+        };
         assert!(store.publish(manifest.clone(), 2, 10, 100).unwrap());
         assert!(!store.publish(manifest, 1, 10, 100).unwrap());
         assert_eq!(store.len(), 1);
@@ -387,7 +533,10 @@ mod tests {
         let key = SigningKey::from_bytes(&[3; 32]);
         let mut bad = provider(2, &key, 10, 1);
         bad.signature[0] ^= 1;
-        assert_eq!(directory.publish(bad, 20).unwrap_err(), StorageError::InvalidProviderAdvertisement);
+        assert_eq!(
+            directory.publish(bad, 20).unwrap_err(),
+            StorageError::InvalidProviderAdvertisement
+        );
         assert!(directory.publish(provider(2, &key, 10, 1), 20).unwrap());
         assert_eq!(directory.select(content(1), 20, 2), vec![node(2)]);
     }

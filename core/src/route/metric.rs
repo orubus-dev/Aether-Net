@@ -31,11 +31,7 @@ impl RouteMetrics {
                 latency * 0.35 + jitter * 0.30 + loss * 0.20 + reliability * 0.15
             }
             TrafficPriority::Interactive => {
-                latency * 0.30
-                    + jitter * 0.25
-                    + loss * 0.20
-                    + reliability * 0.15
-                    + bandwidth * 0.10
+                latency * 0.30 + jitter * 0.25 + loss * 0.20 + reliability * 0.15 + bandwidth * 0.10
             }
             TrafficPriority::Messaging => {
                 reliability * 0.30 + loss * 0.25 + latency * 0.15 + cost * 0.20 + hops * 0.10

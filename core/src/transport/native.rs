@@ -68,7 +68,15 @@ impl AetherL4Segment {
         if flags & !KNOWN_FLAGS != 0 {
             return Err(L4Error::InvalidFlags);
         }
-        Ok(Self { flow_id, mode, sequence, acknowledgement, receive_window, flags, payload })
+        Ok(Self {
+            flow_id,
+            mode,
+            sequence,
+            acknowledgement,
+            receive_window,
+            flags,
+            payload,
+        })
     }
 
     pub fn encode(&self) -> Result<Vec<u8>, L4Error> {
@@ -158,7 +166,9 @@ mod tests {
     #[test]
     fn malformed_payload_length_is_rejected() {
         let flow = AetherFlowId::from_bytes([1; 16]);
-        let segment = AetherL4Segment::new(flow, AetherTransportMode::Datagram, 0, 0, 0, 0, vec![1, 2]).unwrap();
+        let segment =
+            AetherL4Segment::new(flow, AetherTransportMode::Datagram, 0, 0, 0, 0, vec![1, 2])
+                .unwrap();
         let mut bytes = segment.encode().unwrap();
         bytes[47] = 3;
         assert_eq!(AetherL4Segment::decode(&bytes), Err(L4Error::InvalidLength));

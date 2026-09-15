@@ -4,7 +4,9 @@ pub mod policy;
 pub mod registry;
 pub mod service;
 
-pub use deployment::{prepare_upload, verify_artifact, BuildArtifact, DeploymentError, DeploymentPlan, SiteFile};
-pub use hosting::{DeploymentSource, HostingError, SiteId, SiteManifest, SITE_ID_LENGTH};
+pub use deployment::{
+    BuildArtifact, DeploymentError, DeploymentPlan, SiteFile, prepare_upload, verify_artifact,
+};
+pub use hosting::{DeploymentSource, HostingError, SITE_ID_LENGTH, SiteId, SiteManifest};
 pub use registry::RuntimeServiceRegistry;
 pub use service::{ServiceDescriptor, ServiceId, ServiceKind};

@@ -7,15 +7,15 @@ pub mod link;
 pub mod runtime;
 
 pub use adapters::{
-    bluetooth_le_adapter, direct_link_adapter, ethernet_adapter, link_id, wifi_adapter,
-    wifi_direct_adapter, ConfiguredAdapter,
+    ConfiguredAdapter, bluetooth_le_adapter, direct_link_adapter, ethernet_adapter, link_id,
+    wifi_adapter, wifi_direct_adapter,
 };
 pub use capabilities::{PhysicalCapabilities, PhysicalTransport};
 pub use driver::LoopbackDriver;
 pub use engine::{
-    PhysicalAdapterExt, PhysicalEngine, PhysicalSnapshot, UnderlayFrame, UnderlayProperties,
-    DEFAULT_MAX_ADAPTERS, DEFAULT_MAX_LINKS,
+    DEFAULT_MAX_ADAPTERS, DEFAULT_MAX_LINKS, PhysicalAdapterExt, PhysicalEngine, PhysicalSnapshot,
+    UnderlayFrame, UnderlayProperties,
 };
 pub use interface::{PhysicalAdapter, PhysicalDriver, PhysicalError};
 pub use link::{PhysicalLink, PhysicalLinkId};
-pub use runtime::{PhysicalRuntime, DEFAULT_MAX_DRIVERS};
+pub use runtime::{DEFAULT_MAX_DRIVERS, PhysicalRuntime};

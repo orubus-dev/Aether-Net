@@ -13,7 +13,10 @@ pub mod peers;
 pub use config::CoreConfig;
 pub use data_plane::{DataPlaneError, EncryptedDataPlane};
 pub use native_plane::{NativeAetherDataPlane, NativeDataPlaneError};
-pub use native_stack::{NativeAetherStack, NativeIngress, NativeStackError, DEFAULT_MAX_L4_SESSIONS, DEFAULT_MAX_PEER_SESSIONS};
+pub use native_stack::{
+    DEFAULT_MAX_L4_SESSIONS, DEFAULT_MAX_PEER_SESSIONS, NativeAetherStack, NativeIngress,
+    NativeStackError,
+};
 
 pub use discovery::{
     AuthMessageError, ControlError, DiscoveryControl, DiscoveryHello, DiscoveryMessageType,

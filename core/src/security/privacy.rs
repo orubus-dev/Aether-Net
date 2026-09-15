@@ -84,7 +84,9 @@ pub enum PrivacyError {
 impl fmt::Display for PrivacyError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::RandomnessUnavailable => formatter.write_str("cryptographic randomness unavailable"),
+            Self::RandomnessUnavailable => {
+                formatter.write_str("cryptographic randomness unavailable")
+            }
         }
     }
 }

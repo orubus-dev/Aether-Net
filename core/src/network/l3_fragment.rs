@@ -229,7 +229,8 @@ impl L3ReassemblyTable {
                 let entry = self.entries.swap_remove(index);
                 self.bytes = self.entries.iter().map(|candidate| candidate.bytes).sum();
                 let mut reconstructed = packet.clone();
-                reconstructed.flags = L3Flags(entry.flags.0 & !L3Flags::FRAGMENT.0 & !L3Flags::FINAL_FRAGMENT.0);
+                reconstructed.flags =
+                    L3Flags(entry.flags.0 & !L3Flags::FRAGMENT.0 & !L3Flags::FINAL_FRAGMENT.0);
                 reconstructed.payload = payload;
                 return Ok(Some(reconstructed));
             }
@@ -250,7 +251,7 @@ impl L3ReassemblyTable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::network::{AetherAddress, AETHER_ADDRESS_LENGTH, TrafficPriority};
+    use crate::network::{AETHER_ADDRESS_LENGTH, AetherAddress, TrafficPriority};
 
     fn address(seed: u8) -> AetherAddress {
         AetherAddress::from_bytes([seed; AETHER_ADDRESS_LENGTH])

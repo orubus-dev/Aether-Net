@@ -10,10 +10,10 @@ pub use chunk::{
 pub use content::ContentId;
 
 pub use distributed::{
-    ChunkDigest, ChunkStore, DistributedStorage, ManifestStore, ProviderAdvertisement,
-    ProviderDirectory, RepairPlan, StorageError, StoredChunk, StoredManifest,
-    CHUNK_DIGEST_LENGTH, DEFAULT_MAX_CHUNKS, DEFAULT_MAX_MANIFESTS, DEFAULT_MAX_PROVIDERS,
-    DEFAULT_MAX_STORAGE_BYTES, DEFAULT_PROVIDER_TTL_SECONDS,
+    CHUNK_DIGEST_LENGTH, ChunkDigest, ChunkStore, DEFAULT_MAX_CHUNKS, DEFAULT_MAX_MANIFESTS,
+    DEFAULT_MAX_PROVIDERS, DEFAULT_MAX_STORAGE_BYTES, DEFAULT_PROVIDER_TTL_SECONDS,
+    DistributedStorage, ManifestStore, ProviderAdvertisement, ProviderDirectory, RepairPlan,
+    StorageError, StoredChunk, StoredManifest,
 };
 
 pub use request::{ChunkRequest, RequestDeduplicator};

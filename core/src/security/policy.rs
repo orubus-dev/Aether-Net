@@ -76,7 +76,9 @@ mod tests {
 
     #[test]
     fn private_profile_rotates_more_frequently_than_standard() {
-        assert!(SecurityPolicy::private().rotate_privacy_epoch_seconds
-            < SecurityPolicy::standard().rotate_privacy_epoch_seconds);
+        assert!(
+            SecurityPolicy::private().rotate_privacy_epoch_seconds
+                < SecurityPolicy::standard().rotate_privacy_epoch_seconds
+        );
     }
 }

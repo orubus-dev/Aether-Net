@@ -17,7 +17,8 @@ impl ConfiguredAdapter {
         capabilities: PhysicalCapabilities,
         properties: UnderlayProperties,
     ) -> Result<Self, PhysicalError> {
-        if properties.transport != transport || properties.mtu == 0 || properties.bandwidth_bps == 0 {
+        if properties.transport != transport || properties.mtu == 0 || properties.bandwidth_bps == 0
+        {
             return Err(PhysicalError::Unsupported);
         }
         Ok(Self {
@@ -41,7 +42,11 @@ impl ConfiguredAdapter {
         {
             return Err(PhysicalError::DiscoveryFailed);
         }
-        if let Some(existing) = self.discovered_links.iter_mut().find(|existing| existing.id == link.id) {
+        if let Some(existing) = self
+            .discovered_links
+            .iter_mut()
+            .find(|existing| existing.id == link.id)
+        {
             *existing = link;
         } else {
             self.discovered_links.push(link);
@@ -70,10 +75,15 @@ impl PhysicalAdapterExt for ConfiguredAdapter {
     }
 }
 
-pub fn ethernet_adapter(properties: UnderlayProperties) -> Result<ConfiguredAdapter, PhysicalError> {
+pub fn ethernet_adapter(
+    properties: UnderlayProperties,
+) -> Result<ConfiguredAdapter, PhysicalError> {
     ConfiguredAdapter::new(
         PhysicalTransport::Ethernet,
-        PhysicalCapabilities { ethernet: true, ..PhysicalCapabilities::empty() },
+        PhysicalCapabilities {
+            ethernet: true,
+            ..PhysicalCapabilities::empty()
+        },
         UnderlayProperties {
             transport: PhysicalTransport::Ethernet,
             mtu: properties.mtu.min(9000),
@@ -87,7 +97,10 @@ pub fn ethernet_adapter(properties: UnderlayProperties) -> Result<ConfiguredAdap
 pub fn wifi_adapter(properties: UnderlayProperties) -> Result<ConfiguredAdapter, PhysicalError> {
     ConfiguredAdapter::new(
         PhysicalTransport::Wifi,
-        PhysicalCapabilities { wifi: true, ..PhysicalCapabilities::empty() },
+        PhysicalCapabilities {
+            wifi: true,
+            ..PhysicalCapabilities::empty()
+        },
         UnderlayProperties {
             transport: PhysicalTransport::Wifi,
             mtu: properties.mtu.min(2304),
@@ -98,10 +111,15 @@ pub fn wifi_adapter(properties: UnderlayProperties) -> Result<ConfiguredAdapter,
     )
 }
 
-pub fn wifi_direct_adapter(properties: UnderlayProperties) -> Result<ConfiguredAdapter, PhysicalError> {
+pub fn wifi_direct_adapter(
+    properties: UnderlayProperties,
+) -> Result<ConfiguredAdapter, PhysicalError> {
     ConfiguredAdapter::new(
         PhysicalTransport::WifiDirect,
-        PhysicalCapabilities { wifi_direct: true, ..PhysicalCapabilities::empty() },
+        PhysicalCapabilities {
+            wifi_direct: true,
+            ..PhysicalCapabilities::empty()
+        },
         UnderlayProperties {
             transport: PhysicalTransport::WifiDirect,
             mtu: properties.mtu.min(2304),
@@ -112,10 +130,15 @@ pub fn wifi_direct_adapter(properties: UnderlayProperties) -> Result<ConfiguredA
     )
 }
 
-pub fn bluetooth_le_adapter(properties: UnderlayProperties) -> Result<ConfiguredAdapter, PhysicalError> {
+pub fn bluetooth_le_adapter(
+    properties: UnderlayProperties,
+) -> Result<ConfiguredAdapter, PhysicalError> {
     ConfiguredAdapter::new(
         PhysicalTransport::BluetoothLe,
-        PhysicalCapabilities { bluetooth_le: true, ..PhysicalCapabilities::empty() },
+        PhysicalCapabilities {
+            bluetooth_le: true,
+            ..PhysicalCapabilities::empty()
+        },
         UnderlayProperties {
             transport: PhysicalTransport::BluetoothLe,
             mtu: properties.mtu.min(512),
@@ -126,10 +149,15 @@ pub fn bluetooth_le_adapter(properties: UnderlayProperties) -> Result<Configured
     )
 }
 
-pub fn direct_link_adapter(properties: UnderlayProperties) -> Result<ConfiguredAdapter, PhysicalError> {
+pub fn direct_link_adapter(
+    properties: UnderlayProperties,
+) -> Result<ConfiguredAdapter, PhysicalError> {
     ConfiguredAdapter::new(
         PhysicalTransport::Uwb,
-        PhysicalCapabilities { uwb: true, ..PhysicalCapabilities::empty() },
+        PhysicalCapabilities {
+            uwb: true,
+            ..PhysicalCapabilities::empty()
+        },
         UnderlayProperties {
             transport: PhysicalTransport::Uwb,
             mtu: properties.mtu.min(4096),
