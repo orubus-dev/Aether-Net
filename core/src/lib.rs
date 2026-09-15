@@ -11,6 +11,7 @@ pub mod route;
 pub mod runtime;
 pub mod security;
 pub mod services;
+pub mod storage;
 pub mod transport;
 
 pub use core::{AetherCore, CoreState};
@@ -23,4 +24,8 @@ pub use naming::{
     canonicalize_name, NameError, NameHash, NameRecord, NamingEngine, ResourceId, SignedNameUpdate,
 };
 pub use security::{PrivacyContext, PrivacyToken, ReplayWindow, SecurityPolicy, SecurityProfile};
-pub mod storage;
+pub use storage::{
+    ChunkDigest, ChunkId, ChunkStore, ContentChunk, ContentId, ContentManifest, DistributedStorage,
+    ManifestStore, ProviderAdvertisement, ProviderDirectory, RepairPlan, StorageError, StoredChunk,
+    StoredManifest,
+};
