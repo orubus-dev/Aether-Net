@@ -22,6 +22,8 @@ pub enum PhysicalError {
 /// A concrete platform-facing carrier. Native Aether code hands this driver
 /// an already-formed link frame without depending on a specific radio/wire.
 pub trait PhysicalDriver: PhysicalAdapter + Send + Sync {
+    fn mtu(&self) -> usize;
+
     fn transmit(
         &mut self,
         link_id: super::link::PhysicalLinkId,
