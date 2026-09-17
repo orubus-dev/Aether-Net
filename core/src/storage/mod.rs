@@ -29,6 +29,6 @@ pub use request::{ChunkRequest, RequestDeduplicator};
 pub use transfer::{
     AssemblyError, ChunkAssembler, ChunkTransferRequest, PendingTransfer, TransferDirection,
     TransferGovernor, TransferId, TransferLimits, TransferQueue, DEFAULT_DOWNLOAD_BYTES_PER_SECOND,
-    DEFAULT_STORAGE_FRAGMENT, DEFAULT_TRANSFER_BURST_BYTES, DEFAULT_UPLOAD_BYTES_PER_SECOND,
-    MAX_ASSEMBLY_BYTES,
+    DEFAULT_TRANSFER_BURST_BYTES, DEFAULT_UPLOAD_BYTES_PER_SECOND, MAX_ASSEMBLY_BYTES,
+    MAX_STORAGE_FRAGMENT as MAX_TRANSFER_FRAGMENT,
 };
