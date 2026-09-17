@@ -120,7 +120,9 @@ impl ObjectStore {
     pub fn contents(&self, now: u64) -> Vec<ContentId> {
         self.manifests
             .iter()
-            .filter(|item| now < item.manifest.expires_at && self.is_complete(item.manifest.content, now))
+            .filter(|item| {
+                now < item.manifest.expires_at && self.is_complete(item.manifest.content, now)
+            })
             .map(|item| item.manifest.content)
             .collect()
     }
@@ -403,6 +405,9 @@ mod tests {
         let content = ContentId::from_bytes(b"x");
         let id = ChunkId(0);
         let digest = ChunkDigest::of(content, id, b"good");
-        assert_eq!(store.put_chunk(content, id, digest, b"bad", 1, 10), Err(ObjectStoreError::IntegrityFailure));
+        assert_eq!(
+            store.put_chunk(content, id, digest, b"bad", 1, 10),
+            Err(ObjectStoreError::IntegrityFailure)
+        );
     }
 }
