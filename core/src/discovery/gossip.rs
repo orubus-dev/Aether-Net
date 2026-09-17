@@ -58,7 +58,6 @@ impl SignedDiscoveryAdvertisement {
         {
             return Err(DiscoveryGossipError::CapacityExceeded);
         }
-
         let mut advertisement = Self {
             origin,
             device_id,
@@ -74,7 +73,6 @@ impl SignedDiscoveryAdvertisement {
         advertisement.signature = signing_key.sign(&advertisement.signing_bytes()).to_bytes();
         Ok(advertisement)
     }
-
     pub fn verify(&self, now: u64) -> Result<(), DiscoveryGossipError> {
         if self.peers.len() > MAX_ADVERTISEMENT_PEERS
             || self.services.len() > MAX_ADVERTISEMENT_SERVICES
@@ -92,13 +90,11 @@ impl SignedDiscoveryAdvertisement {
         if now.saturating_sub(self.issued_at) > MAX_ADVERTISEMENT_AGE_SECONDS {
             return Err(DiscoveryGossipError::Expired);
         }
-
         let signature = Signature::from_bytes(&self.signature);
         verifying_key
             .verify_strict(&self.signing_bytes(), &signature)
             .map_err(|_| DiscoveryGossipError::InvalidSignature)
     }
-
     pub fn encode(&self) -> Result<Vec<u8>, DiscoveryGossipError> {
         let mut bytes = self.signing_bytes();
         bytes.extend_from_slice(&self.signature);
@@ -113,7 +109,6 @@ impl SignedDiscoveryAdvertisement {
         }
         Ok(bytes)
     }
-
     pub fn decode(bytes: &[u8]) -> Result<Self, DiscoveryGossipError> {
         if bytes.len() < HEADER_LENGTH + DISCOVERY_GOSSIP_SIGNATURE_LENGTH {
             return Err(DiscoveryGossipError::InvalidLength);
@@ -124,7 +119,6 @@ impl SignedDiscoveryAdvertisement {
         if bytes[4] != DISCOVERY_GOSSIP_VERSION {
             return Err(DiscoveryGossipError::UnsupportedVersion);
         }
-
         let mut cursor = 5;
         let origin = read_node_id(bytes, &mut cursor)?;
         let device_id = read_device_id(bytes, &mut cursor)?;
@@ -142,7 +136,6 @@ impl SignedDiscoveryAdvertisement {
         {
             return Err(DiscoveryGossipError::CapacityExceeded);
         }
-
         let expected = HEADER_LENGTH
             + peer_count * PEER_LENGTH
             + service_count * SERVICE_LENGTH
@@ -151,25 +144,23 @@ impl SignedDiscoveryAdvertisement {
         if bytes.len() != expected {
             return Err(DiscoveryGossipError::InvalidLength);
         }
-
         let mut peers = Vec::with_capacity(peer_count);
         for _ in 0..peer_count {
-            peers.push(decode_peer(bytes, &mut cursor)?);
+            peers.push(decode_peer(bytes, &mut cursor)?)
         }
         let mut services = Vec::with_capacity(service_count);
         for _ in 0..service_count {
-            services.push(decode_service(bytes, &mut cursor)?);
+            services.push(decode_service(bytes, &mut cursor)?)
         }
         let mut resources = Vec::with_capacity(resource_count);
         for _ in 0..resource_count {
-            resources.push(decode_resource(bytes, &mut cursor)?);
+            resources.push(decode_resource(bytes, &mut cursor)?)
         }
         let mut signature = [0u8; DISCOVERY_GOSSIP_SIGNATURE_LENGTH];
         read_exact(bytes, &mut cursor, &mut signature)?;
         if cursor != bytes.len() {
             return Err(DiscoveryGossipError::InvalidLength);
         }
-
         Ok(Self {
             origin,
             device_id,
@@ -183,24 +174,19 @@ impl SignedDiscoveryAdvertisement {
             signature,
         })
     }
-
     pub fn peer_records(&self) -> impl Iterator<Item = &PeerRecord> {
         self.peers.iter()
     }
-
     pub fn service_records(&self) -> impl Iterator<Item = &ServiceRecord> {
         self.services.iter()
     }
-
     pub fn resource_records(&self) -> impl Iterator<Item = &ResourceRecord> {
         self.resources.iter()
     }
-
     fn verifying_key(&self) -> Result<VerifyingKey, DiscoveryGossipError> {
         VerifyingKey::from_bytes(&self.public_key)
             .map_err(|_| DiscoveryGossipError::InvalidPublicKey)
     }
-
     fn signing_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(
             HEADER_LENGTH
@@ -220,22 +206,20 @@ impl SignedDiscoveryAdvertisement {
         bytes.push(self.services.len() as u8);
         bytes.push(self.resources.len() as u8);
         for peer in &self.peers {
-            encode_peer(peer, &mut bytes);
+            encode_peer(peer, &mut bytes)
         }
         for service in &self.services {
-            encode_service(service, &mut bytes);
+            encode_service(service, &mut bytes)
         }
         for resource in &self.resources {
-            encode_resource(resource, &mut bytes);
+            encode_resource(resource, &mut bytes)
         }
         bytes
     }
 }
-
 fn node_id_from_public_key(public_key: &[u8; 32]) -> NodeId {
     NodeId::from_bytes(*Fingerprint::from_domain(b"aether/node-id/v1", public_key).as_bytes())
 }
-
 fn validate_interval(
     issued_at: u64,
     expires_at: u64,
@@ -247,7 +231,6 @@ fn validate_interval(
         Ok(())
     }
 }
-
 fn encode_peer(value: &PeerRecord, out: &mut Vec<u8>) {
     out.extend_from_slice(value.node_id.as_bytes());
     out.extend_from_slice(value.device_id.as_bytes());
@@ -255,7 +238,6 @@ fn encode_peer(value: &PeerRecord, out: &mut Vec<u8>) {
     out.extend_from_slice(&value.observed_at.to_be_bytes());
     out.extend_from_slice(&value.expires_at.to_be_bytes());
 }
-
 fn decode_peer(bytes: &[u8], cursor: &mut usize) -> Result<PeerRecord, DiscoveryGossipError> {
     let node_id = read_node_id(bytes, cursor)?;
     let device_id = read_device_id(bytes, cursor)?;
@@ -270,7 +252,6 @@ fn decode_peer(bytes: &[u8], cursor: &mut usize) -> Result<PeerRecord, Discovery
         expires_at,
     })
 }
-
 fn encode_service(value: &ServiceRecord, out: &mut Vec<u8>) {
     out.extend_from_slice(&value.service_id);
     out.extend_from_slice(value.owner.as_bytes());
@@ -279,7 +260,6 @@ fn encode_service(value: &ServiceRecord, out: &mut Vec<u8>) {
     out.extend_from_slice(&value.observed_at.to_be_bytes());
     out.extend_from_slice(&value.expires_at.to_be_bytes());
 }
-
 fn decode_service(bytes: &[u8], cursor: &mut usize) -> Result<ServiceRecord, DiscoveryGossipError> {
     let mut service_id = [0u8; 16];
     read_exact(bytes, cursor, &mut service_id)?;
@@ -297,7 +277,6 @@ fn decode_service(bytes: &[u8], cursor: &mut usize) -> Result<ServiceRecord, Dis
         expires_at,
     })
 }
-
 fn encode_resource(value: &ResourceRecord, out: &mut Vec<u8>) {
     out.extend_from_slice(&value.resource_id);
     out.extend_from_slice(value.provider.as_bytes());
@@ -306,7 +285,6 @@ fn encode_resource(value: &ResourceRecord, out: &mut Vec<u8>) {
     out.extend_from_slice(&value.observed_at.to_be_bytes());
     out.extend_from_slice(&value.expires_at.to_be_bytes());
 }
-
 fn decode_resource(
     bytes: &[u8],
     cursor: &mut usize,
@@ -327,7 +305,6 @@ fn decode_resource(
         expires_at,
     })
 }
-
 fn read_exact(
     bytes: &[u8],
     cursor: &mut usize,
@@ -341,19 +318,16 @@ fn read_exact(
     *cursor = end;
     Ok(())
 }
-
 fn read_node_id(bytes: &[u8], cursor: &mut usize) -> Result<NodeId, DiscoveryGossipError> {
     let mut value = [0u8; 32];
     read_exact(bytes, cursor, &mut value)?;
     Ok(NodeId::from_bytes(value))
 }
-
 fn read_device_id(bytes: &[u8], cursor: &mut usize) -> Result<DeviceId, DiscoveryGossipError> {
     let mut value = [0u8; 32];
     read_exact(bytes, cursor, &mut value)?;
     Ok(DeviceId::from_bytes(value))
 }
-
 fn read_u8(bytes: &[u8], cursor: &mut usize) -> Result<u8, DiscoveryGossipError> {
     if *cursor >= bytes.len() {
         return Err(DiscoveryGossipError::InvalidLength);
@@ -362,38 +336,40 @@ fn read_u8(bytes: &[u8], cursor: &mut usize) -> Result<u8, DiscoveryGossipError>
     *cursor += 1;
     Ok(value)
 }
-
 fn read_u16(bytes: &[u8], cursor: &mut usize) -> Result<u16, DiscoveryGossipError> {
     let mut value = [0u8; 2];
     read_exact(bytes, cursor, &mut value)?;
     Ok(u16::from_be_bytes(value))
 }
-
 fn read_u64(bytes: &[u8], cursor: &mut usize) -> Result<u64, DiscoveryGossipError> {
     let mut value = [0u8; 8];
     read_exact(bytes, cursor, &mut value)?;
     Ok(u64::from_be_bytes(value))
 }
-
 fn transport_to_u8(value: PhysicalTransport) -> u8 {
     match value {
         PhysicalTransport::Ethernet => 1,
         PhysicalTransport::Wifi => 2,
-        PhysicalTransport::Bluetooth => 3,
-        PhysicalTransport::Uwb => 4,
-        PhysicalTransport::Cellular => 5,
-        PhysicalTransport::Virtual => 6,
+        PhysicalTransport::WifiDirect => 3,
+        PhysicalTransport::WifiAware => 4,
+        PhysicalTransport::BluetoothLe => 5,
+        PhysicalTransport::Uwb => 6,
+        PhysicalTransport::LoRa => 7,
+        PhysicalTransport::Cellular => 8,
+        PhysicalTransport::Satellite => 9,
     }
 }
-
 fn transport_from_u8(value: u8) -> Result<PhysicalTransport, DiscoveryGossipError> {
     match value {
         1 => Ok(PhysicalTransport::Ethernet),
         2 => Ok(PhysicalTransport::Wifi),
-        3 => Ok(PhysicalTransport::Bluetooth),
-        4 => Ok(PhysicalTransport::Uwb),
-        5 => Ok(PhysicalTransport::Cellular),
-        6 => Ok(PhysicalTransport::Virtual),
+        3 => Ok(PhysicalTransport::WifiDirect),
+        4 => Ok(PhysicalTransport::WifiAware),
+        5 => Ok(PhysicalTransport::BluetoothLe),
+        6 => Ok(PhysicalTransport::Uwb),
+        7 => Ok(PhysicalTransport::LoRa),
+        8 => Ok(PhysicalTransport::Cellular),
+        9 => Ok(PhysicalTransport::Satellite),
         _ => Err(DiscoveryGossipError::InvalidTransport),
     }
 }
@@ -415,7 +391,6 @@ pub enum DiscoveryGossipError {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn signed_advertisement_round_trips_and_verifies() {
         let key = DeviceSigningKey::generate().unwrap();
@@ -438,9 +413,8 @@ mod tests {
         let decoded = SignedDiscoveryAdvertisement::decode(&encoded).unwrap();
         decoded.verify(110).unwrap();
         assert_eq!(decoded.sequence, 7);
-        assert_eq!(decoded.peer_records().count(), 1);
+        assert_eq!(decoded.peer_records().count(), 1)
     }
-
     #[test]
     fn tampering_breaks_signature() {
         let key = DeviceSigningKey::generate().unwrap();
@@ -455,9 +429,8 @@ mod tests {
         assert_eq!(
             decoded.verify(20),
             Err(DiscoveryGossipError::InvalidSignature)
-        );
+        )
     }
-
     #[test]
     fn identity_binding_is_self_certifying() {
         let key_a = DeviceSigningKey::generate().unwrap();
@@ -467,6 +440,6 @@ mod tests {
         assert!(
             SignedDiscoveryAdvertisement::new(&key_b, origin_a, device_a, 1, 1, 20, &[], &[], &[],)
                 .is_err()
-        );
+        )
     }
 }

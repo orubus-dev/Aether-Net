@@ -3,8 +3,13 @@ use crate::discovery::FormationState;
 use crate::errors::CoreError;
 use crate::naming::{NameRecord, ResourceId};
 use crate::naming_protocol::{NameQuery, NameResponse};
+use crate::network::NodeId;
 use crate::runtime::node::{NodeEvent, NodeEventLoop, NodeState};
-use crate::runtime::{CoreConfig, NameRuntimeError};
+use crate::runtime::{CoreConfig, NameRuntimeError, StorageRuntimeError};
+use crate::storage::{
+    ChunkDigest, ChunkId, ContentId, ObjectManifest, ProviderAdvertisement, RepairPlan,
+    StorageControl,
+};
 use crate::transport::{UdpTransport, UdpTransportError};
 use std::net::SocketAddr;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -69,6 +74,9 @@ impl AetherNodeRuntime {
     pub fn resolve_name(&mut self, name: &str) -> Result<ResourceId, NameRuntimeError> {
         self.state.naming.resolve(name, unix_timestamp())
     }
+    pub fn resolve_content_name(&mut self, name: &str) -> Result<ContentId, NameRuntimeError> {
+        Ok(ContentId::from_raw(*self.resolve_name(name)?.as_bytes()))
+    }
     pub fn begin_name_query(&mut self, name: &str) -> Result<NameQuery, NameRuntimeError> {
         self.state.naming.begin_query(name, unix_timestamp())
     }
@@ -83,7 +91,55 @@ impl AetherNodeRuntime {
     pub fn local_name_count(&self) -> usize {
         self.state.naming.local_count()
     }
-
+    pub fn publish_storage_bytes(
+        &mut self,
+        bytes: &[u8],
+    ) -> Result<(ObjectManifest, ProviderAdvertisement), StorageRuntimeError> {
+        self.state.storage.publish_bytes(bytes, unix_timestamp())
+    }
+    pub fn begin_storage_manifest_query(
+        &mut self,
+        content: ContentId,
+        start: u32,
+    ) -> StorageControl {
+        self.state.storage.begin_manifest_query(content, start)
+    }
+    pub fn begin_storage_chunk_query(
+        &mut self,
+        content: ContentId,
+        chunk: ChunkId,
+        offset: u32,
+        length: u16,
+        digest: ChunkDigest,
+    ) -> StorageControl {
+        self.state
+            .storage
+            .begin_chunk_query(content, chunk, offset, length, digest)
+    }
+    pub fn storage_required_replicas(&self) -> usize {
+        self.state.storage.required_replicas()
+    }
+    pub fn set_storage_required_replicas(&mut self, count: usize) {
+        self.state.storage.set_required_replicas(count);
+    }
+    pub fn storage_replica_count(&self, content: ContentId) -> usize {
+        self.state.storage.replica_count(content, unix_timestamp())
+    }
+    pub fn storage_repair_plan(&self, content: ContentId) -> RepairPlan {
+        self.state.storage.repair_plan(content, unix_timestamp())
+    }
+    pub fn stored_object_count(&self) -> usize {
+        self.state.storage.object_count()
+    }
+    pub fn stored_chunk_count(&self) -> usize {
+        self.state.storage.chunk_count()
+    }
+    pub fn stored_bytes(&self) -> u64 {
+        self.state.storage.stored_bytes()
+    }
+    pub fn local_node_id(&self) -> NodeId {
+        NodeId::from_device(self.state.device())
+    }
     pub async fn run(self, advertised_peers: Vec<SocketAddr>) -> Result<(), NodeRuntimeError> {
         let (_shutdown_tx, shutdown_rx) = mpsc::channel(1);
         self.run_with_shutdown(advertised_peers, shutdown_rx).await
@@ -130,7 +186,6 @@ impl AetherNodeRuntime {
         result.map(|_| ())
     }
 }
-
 fn unix_timestamp() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -148,28 +203,26 @@ pub enum NodeRuntimeError {
     Loop(crate::runtime::node::NodeLoopError),
 }
 impl std::fmt::Display for NodeRuntimeError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Core(error) => write!(formatter, "Aether core error: {error}"),
-            Self::Transport(error) => write!(formatter, "Aether transport error: {error}"),
-            Self::IdentityUnavailable => formatter.write_str("Aether node identity unavailable"),
-            Self::Stopped => formatter.write_str("Aether node is stopped"),
-            Self::Runtime => formatter.write_str("Aether runtime task failed"),
-            Self::Loop(error) => write!(formatter, "Aether node event loop error: {error}"),
+            Self::Core(e) => write!(f, "Aether core error: {e}"),
+            Self::Transport(e) => write!(f, "Aether transport error: {e}"),
+            Self::IdentityUnavailable => f.write_str("Aether node identity unavailable"),
+            Self::Stopped => f.write_str("Aether node is stopped"),
+            Self::Runtime => f.write_str("Aether runtime task failed"),
+            Self::Loop(e) => write!(f, "Aether node event loop error: {e}"),
         }
     }
 }
 impl std::error::Error for NodeRuntimeError {}
 impl std::fmt::Display for crate::transport::UdpTransportError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Bind(error) => write!(formatter, "UDP bind failed: {error}"),
-            Self::LocalAddress(error) => {
-                write!(formatter, "could not read local UDP address: {error}")
-            }
-            Self::Send(error) => write!(formatter, "UDP send failed: {error}"),
-            Self::Receive(error) => write!(formatter, "UDP receive failed: {error}"),
-            Self::DatagramTooLarge => formatter.write_str("UDP datagram exceeds maximum size"),
+            Self::Bind(e) => write!(f, "UDP bind failed: {e}"),
+            Self::LocalAddress(e) => write!(f, "could not read local UDP address: {e}"),
+            Self::Send(e) => write!(f, "UDP send failed: {e}"),
+            Self::Receive(e) => write!(f, "UDP receive failed: {e}"),
+            Self::DatagramTooLarge => f.write_str("UDP datagram exceeds maximum size"),
         }
     }
 }

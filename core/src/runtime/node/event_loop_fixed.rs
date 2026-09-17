@@ -1,15 +1,16 @@
-use crate::discovery::{FormationState, SignedDiscoveryAdvertisement};
-use crate::naming_protocol::{
-    DelegationAnnouncement, NAMING_MAGIC, NameAnnouncement, NameControl, NameResponse,
-};
+use crate::discovery::{FormationState, ResourceRecord, SignedDiscoveryAdvertisement};
+use crate::naming_protocol::{DelegationAnnouncement, NAMING_MAGIC, NameControl, NameResponse};
 use crate::network::{NodeCapabilities, NodeId, NodeRole};
 use crate::runtime::discovery::{
     DISCOVERY_ADVERTISEMENT_INTERVAL_SECONDS, DiscoveryControl, DiscoveryHello, HelloAck,
 };
 use crate::runtime::node::{NodeEvent, NodeRuntimeState, NodeState};
 use crate::runtime::peers::RuntimePeer;
+use crate::runtime::storage::StorageRuntimeError;
+use crate::storage::protocol::{STORAGE_MAGIC, StorageControl};
 use crate::transport::{MAX_DATAGRAM_SIZE, UdpTransport, UdpTransportError};
 use std::net::SocketAddr;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tokio::time;
@@ -20,6 +21,9 @@ pub const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(5);
 pub const HELLO_INTERVAL: Duration = Duration::from_secs(10);
 pub const DISCOVERY_GOSSIP_FANOUT: usize = 32;
 pub const NAME_GOSSIP_FANOUT: usize = 32;
+pub const STORAGE_GOSSIP_FANOUT: usize = 32;
+pub const STORAGE_ADVERTISEMENT_INTERVAL: Duration = Duration::from_secs(30);
+pub const STORAGE_RESOURCE_KIND: u8 = 8;
 
 pub struct NodeEventLoop {
     transport: UdpTransport,
@@ -73,17 +77,20 @@ impl NodeEventLoop {
         self.emit_formation_if_changed().await?;
         self.broadcast_hello().await?;
         self.broadcast_advertisement().await?;
+        self.broadcast_storage_advertisements().await?;
         let mut maintenance = time::interval(MAINTENANCE_INTERVAL);
         let mut hello_timer = time::interval(HELLO_INTERVAL);
         let mut ad_timer = time::interval(Duration::from_secs(
             DISCOVERY_ADVERTISEMENT_INTERVAL_SECONDS,
         ));
+        let mut storage_timer = time::interval(STORAGE_ADVERTISEMENT_INTERVAL);
         let mut buf = vec![0u8; MAX_DATAGRAM_SIZE];
         loop {
             tokio::select! {
                 shutdown=self.shutdown.recv()=>{self.state.lifecycle=NodeRuntimeState::Stopping;let _=self.events.send(NodeEvent::Shutdown).await;self.state.lifecycle=NodeRuntimeState::Stopped;return Ok(self.state);},
                 _=hello_timer.tick()=>self.broadcast_hello().await?,
                 _=ad_timer.tick()=>self.broadcast_advertisement().await?,
+                _=storage_timer.tick()=>self.broadcast_storage_advertisements().await?,
                 _=maintenance.tick()=>self.maintain().await?,
                 result=self.transport.receive_into(&mut buf)=>{let (length,source)=result.map_err(NodeLoopError::Transport)?;self.handle_datagram(&buf[..length],source).await?;}
             }
@@ -129,6 +136,36 @@ impl NodeEventLoop {
         }
         Ok(())
     }
+    async fn broadcast_storage_advertisements(&mut self) -> Result<(), NodeLoopError> {
+        let now = unix_timestamp();
+        let advertisements = self.state.storage.local_advertisements(now);
+        let mut targets = self.advertised_peers.clone();
+        targets.extend(self.state.runtime_peers().map(|(_, p)| p.address));
+        targets.retain(|address| *address != SocketAddr::from(([0, 0, 0, 0], 0)));
+        targets.sort_unstable();
+        targets.dedup();
+        for advertisement in advertisements {
+            let resource = ResourceRecord {
+                resource_id: *advertisement.content.as_bytes(),
+                provider: advertisement.provider,
+                kind: STORAGE_RESOURCE_KIND,
+                version: advertisement.version,
+                observed_at: advertisement.observed_at,
+                expires_at: advertisement.expires_at,
+            };
+            let _ = self.state.formation.publish_resource(resource, now);
+            let frame = StorageControl::ProviderAnnouncement(advertisement)
+                .encode()
+                .map_err(NodeLoopError::StorageEncode)?;
+            for target in &targets {
+                self.transport
+                    .send_to(&frame, *target)
+                    .await
+                    .map_err(NodeLoopError::Transport)?;
+            }
+        }
+        Ok(())
+    }
     fn create_hello(&self) -> DiscoveryHello {
         let device = self.state.device();
         let mut capabilities = NodeCapabilities::SEND.insert(NodeCapabilities::RECEIVE);
@@ -160,6 +197,9 @@ impl NodeEventLoop {
     ) -> Result<(), NodeLoopError> {
         if bytes.starts_with(&NAMING_MAGIC) {
             return self.handle_name_message(bytes, source).await;
+        }
+        if bytes.starts_with(&STORAGE_MAGIC) {
+            return self.handle_storage_message(bytes, source).await;
         }
         let control = DiscoveryControl::decode(bytes).map_err(NodeLoopError::InvalidDiscovery)?;
         match control {
@@ -202,6 +242,7 @@ impl NodeEventLoop {
             .await
             .map_err(|_| NodeLoopError::EventChannelClosed)?;
         self.send_advertisement_to(source).await?;
+        self.broadcast_storage_advertisements().await?;
         Ok(())
     }
     async fn handle_advertisement(
@@ -333,6 +374,104 @@ impl NodeEventLoop {
         }
         Ok(())
     }
+    async fn handle_storage_message(
+        &mut self,
+        bytes: &[u8],
+        source: SocketAddr,
+    ) -> Result<(), NodeLoopError> {
+        let control = StorageControl::decode(bytes).map_err(NodeLoopError::Storage)?;
+        let Some(peer) = self.node_id_for_source(source) else {
+            return Ok(());
+        };
+        let is_provider = matches!(&control, StorageControl::ProviderAnnouncement(_));
+        let responses =
+            match self
+                .state
+                .storage
+                .handle(control.clone(), peer, monotonic_ms(), unix_timestamp())
+            {
+                Ok(responses) => responses,
+                Err(StorageRuntimeError::ProviderRejected | StorageRuntimeError::InvalidPeer) => {
+                    return Ok(());
+                }
+                Err(error) => return Err(NodeLoopError::StorageRuntime(error)),
+            };
+        for response in responses {
+            let frame = response.encode().map_err(NodeLoopError::StorageEncode)?;
+            self.transport
+                .send_to(&frame, source)
+                .await
+                .map_err(NodeLoopError::Transport)?;
+        }
+        if is_provider {
+            if let StorageControl::ProviderAnnouncement(advertisement) = control {
+                let now = unix_timestamp();
+                let resource = ResourceRecord {
+                    resource_id: *advertisement.content.as_bytes(),
+                    provider: advertisement.provider,
+                    kind: STORAGE_RESOURCE_KIND,
+                    version: advertisement.version,
+                    observed_at: advertisement.observed_at,
+                    expires_at: advertisement.expires_at,
+                };
+                let _ = self.state.formation.publish_resource(resource, now);
+                let frame = StorageControl::ProviderAnnouncement(advertisement)
+                    .encode()
+                    .map_err(NodeLoopError::StorageEncode)?;
+                self.gossip_storage(frame, source).await?;
+            }
+        }
+        Ok(())
+    }
+    fn node_id_for_source(&self, source: SocketAddr) -> Option<NodeId> {
+        self.state
+            .runtime_peers()
+            .find(|(_, peer)| peer.address == source)
+            .map(|(node, _)| *node)
+    }
+    async fn gossip_storage(
+        &self,
+        frame: Vec<u8>,
+        source: SocketAddr,
+    ) -> Result<(), NodeLoopError> {
+        let targets: Vec<_> = self
+            .state
+            .runtime_peers()
+            .map(|(_, p)| p.address)
+            .filter(|a| *a != source && *a != SocketAddr::from(([0, 0, 0, 0], 0)))
+            .take(STORAGE_GOSSIP_FANOUT)
+            .collect();
+        for target in targets {
+            self.transport
+                .send_to(&frame, target)
+                .await
+                .map_err(NodeLoopError::Transport)?;
+        }
+        Ok(())
+    }
+    async fn repair_storage(&mut self) -> Result<(), NodeLoopError> {
+        let peers: Vec<(NodeId, SocketAddr)> = self
+            .state
+            .runtime_peers()
+            .map(|(id, peer)| (*id, peer.address))
+            .filter(|(_, addr)| *addr != SocketAddr::from(([0, 0, 0, 0], 0)))
+            .collect();
+        let ids: Vec<NodeId> = peers.iter().map(|(id, _)| *id).collect();
+        let messages = self
+            .state
+            .storage
+            .replication_step(&ids, monotonic_ms(), unix_timestamp());
+        for (target, message) in messages {
+            if let Some((_, address)) = peers.iter().find(|(id, _)| *id == target) {
+                let frame = message.encode().map_err(NodeLoopError::StorageEncode)?;
+                self.transport
+                    .send_to(&frame, *address)
+                    .await
+                    .map_err(NodeLoopError::Transport)?;
+            }
+        }
+        Ok(())
+    }
     async fn maintain(&mut self) -> Result<(), NodeLoopError> {
         let now = Instant::now();
         for node_id in self.state.peer_table.expire(now, PEER_TIMEOUT) {
@@ -343,8 +482,11 @@ impl NodeEventLoop {
                 .await
                 .map_err(|_| NodeLoopError::EventChannelClosed)?;
         }
-        let _ = self.state.formation.maintain(unix_timestamp());
-        let _ = self.state.naming.expire(unix_timestamp());
+        let wall = unix_timestamp();
+        let _ = self.state.formation.maintain(wall);
+        let _ = self.state.naming.expire(wall);
+        self.state.storage.gc(monotonic_ms(), wall);
+        self.repair_storage().await?;
         self.state.mark_stale_peers(now, PEER_STALE_TIMEOUT);
         self.events
             .send(NodeEvent::Tick)
@@ -353,18 +495,18 @@ impl NodeEventLoop {
         self.emit_formation_if_changed().await
     }
     async fn emit_formation_if_changed(&mut self) -> Result<(), NodeLoopError> {
-        let s = (
+        let snapshot = (
             self.state.formation_state(),
             self.state.formation_generation(),
         );
-        if s == self.formation_snapshot {
+        if snapshot == self.formation_snapshot {
             return Ok(());
         }
-        self.formation_snapshot = s;
+        self.formation_snapshot = snapshot;
         self.events
             .send(NodeEvent::FormationChanged {
-                state: s.0,
-                generation: s.1,
+                state: snapshot.0,
+                generation: snapshot.1,
             })
             .await
             .map_err(|_| NodeLoopError::EventChannelClosed)
@@ -376,6 +518,11 @@ fn unix_timestamp() -> u64 {
         .unwrap_or_default()
         .as_secs()
 }
+fn monotonic_ms() -> u64 {
+    static START: OnceLock<Instant> = OnceLock::new();
+    START.get_or_init(Instant::now).elapsed().as_millis() as u64
+}
+
 #[derive(Debug)]
 pub enum NodeLoopError {
     Transport(UdpTransportError),
@@ -385,6 +532,9 @@ pub enum NodeLoopError {
     NamingEncode(crate::naming_protocol::NamingCodecError),
     NameRuntime(crate::runtime::naming::NameRuntimeError),
     Resolution(crate::name_resolution::ResolutionError),
+    Storage(crate::storage::protocol::StorageCodecError),
+    StorageEncode(crate::storage::protocol::StorageCodecError),
+    StorageRuntime(StorageRuntimeError),
     EventChannelClosed,
 }
 impl std::fmt::Display for NodeLoopError {
@@ -397,6 +547,9 @@ impl std::fmt::Display for NodeLoopError {
             Self::NamingEncode(e) => write!(f, "naming encode error: {e:?}"),
             Self::NameRuntime(e) => write!(f, "name runtime error: {e:?}"),
             Self::Resolution(e) => write!(f, "name resolution error: {e:?}"),
+            Self::Storage(e) => write!(f, "invalid storage message: {e:?}"),
+            Self::StorageEncode(e) => write!(f, "storage encode error: {e:?}"),
+            Self::StorageRuntime(e) => write!(f, "storage runtime error: {e:?}"),
             Self::EventChannelClosed => f.write_str("node event channel closed"),
         }
     }

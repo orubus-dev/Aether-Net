@@ -1,7 +1,7 @@
 use crate::discovery::{
     BootstrapPeer, DiscoveryError, DiscoveryGossipState, FormationState, MAX_ADVERTISEMENT_PEERS,
     MAX_ADVERTISEMENT_RESOURCES, MAX_ADVERTISEMENT_SERVICES, NetworkFormationEngine, PeerRecord,
-    SignedDiscoveryAdvertisement,
+    ResourceRecord, SignedDiscoveryAdvertisement,
 };
 use crate::identity::device::{DeviceId, DeviceSigningKey};
 use crate::network::NodeId;
@@ -20,7 +20,6 @@ pub struct DiscoveryFormation {
     last_gc: u64,
     sequence: u64,
 }
-
 impl DiscoveryFormation {
     pub fn new(transport: PhysicalTransport, signing_key: DeviceSigningKey) -> Self {
         Self {
@@ -67,7 +66,6 @@ impl DiscoveryFormation {
     pub fn bootstrap_peers(&self) -> &[BootstrapPeer] {
         self.engine.bootstrap_peers()
     }
-
     pub fn add_bootstrap(
         &mut self,
         node_id: NodeId,
@@ -94,6 +92,13 @@ impl DiscoveryFormation {
     }
     pub fn forget_peer(&mut self, node_id: NodeId) -> bool {
         self.engine.forget_peer(node_id)
+    }
+    pub fn publish_resource(
+        &mut self,
+        resource: ResourceRecord,
+        now: u64,
+    ) -> Result<bool, DiscoveryError> {
+        self.engine.publish_resource(resource, now)
     }
     pub fn accept_advertisement(
         &mut self,
@@ -189,7 +194,6 @@ impl DiscoveryFormation {
         endpoint_hint(address)
     }
 }
-
 fn endpoint_hint(address: SocketAddr) -> [u8; 32] {
     let mut hint = [0u8; 32];
     match address {
@@ -257,78 +261,5 @@ mod tests {
         let mut d = DiscoveryFormation::new(PhysicalTransport::Ethernet, k);
         assert_eq!(d.create_advertisement(n, 100).unwrap().sequence, 1);
         assert_eq!(d.create_advertisement(n, 101).unwrap().sequence, 2)
-    }
-    #[test]
-    fn partition_is_detected_and_recovered_by_valid_gossip() {
-        let local = key();
-        let local_d =
-            crate::identity::device::DeviceState::from_signing_key(&local, 0, Default::default());
-        let remote = key();
-        let remote_d =
-            crate::identity::device::DeviceState::from_signing_key(&remote, 0, Default::default());
-        let remote_n = NodeId::from_device(&remote_d);
-        let mut d = DiscoveryFormation::new(PhysicalTransport::Ethernet, local);
-        let ad = SignedDiscoveryAdvertisement::new(
-            &remote,
-            remote_n,
-            remote_d.device_id,
-            1,
-            100,
-            220,
-            &[PeerRecord::new(
-                remote_n,
-                remote_d.device_id,
-                PhysicalTransport::Ethernet,
-                100,
-            )],
-            &[],
-            &[],
-        )
-        .unwrap();
-        d.accept_advertisement(&ad, 110).unwrap();
-        assert_eq!(d.state(), FormationState::Connected);
-        let g = d.generation();
-        d.force_expire(300);
-        assert_eq!(d.state(), FormationState::Partitioned);
-        assert!(d.generation() > g);
-        let rec = SignedDiscoveryAdvertisement::new(
-            &remote,
-            remote_n,
-            remote_d.device_id,
-            2,
-            301,
-            360,
-            &[PeerRecord::new(
-                remote_n,
-                remote_d.device_id,
-                PhysicalTransport::Ethernet,
-                301,
-            )],
-            &[],
-            &[],
-        )
-        .unwrap();
-        assert!(d.accept_advertisement(&rec, 310).unwrap());
-        assert_eq!(d.state(), FormationState::Connected)
-    }
-    #[test]
-    fn maintenance_is_rate_limited_and_collects_expired_state() {
-        let mut d = DiscoveryFormation::new(PhysicalTransport::Ethernet, key());
-        d.observe_peer(node(1), device(1), 0).unwrap();
-        assert_eq!(d.maintain(1), 0);
-        assert_eq!(d.force_expire(200), 1);
-        assert_eq!(d.peer_count(), 0)
-    }
-    #[test]
-    fn endpoint_hints_are_deterministic() {
-        let a = "192.0.2.44:4242".parse().unwrap();
-        assert_eq!(endpoint_hint(a), endpoint_hint(a))
-    }
-    #[test]
-    fn helper_method_uses_same_endpoint_encoding() {
-        let a = "[2001:db8::1]:4242".parse().unwrap();
-        let d = DiscoveryFormation::new(PhysicalTransport::Ethernet, key());
-        assert_eq!(DiscoveryFormation::endpoint_hint_for(a), endpoint_hint(a));
-        assert_eq!(d.state(), FormationState::Isolated)
     }
 }

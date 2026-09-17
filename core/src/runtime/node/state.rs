@@ -4,6 +4,7 @@ use crate::network::NodeId;
 use crate::runtime::discovery::DiscoveryFormation;
 use crate::runtime::naming::NameRuntime;
 use crate::runtime::peers::{PeerTable, RuntimePeer, RuntimePeerState};
+use crate::runtime::storage::StorageRuntime;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::time::{Duration, Instant};
@@ -22,21 +23,24 @@ pub struct NodeState {
     pub peer_table: PeerTable,
     pub formation: DiscoveryFormation,
     pub naming: NameRuntime,
+    pub storage: StorageRuntime,
     device: DeviceState,
     runtime_peers: HashMap<NodeId, RuntimePeer>,
 }
 
 impl NodeState {
     pub fn new(now: Instant, device: DeviceState, signing_key: DeviceSigningKey) -> Self {
+        let node_id = NodeId::from_device(&device);
         Self {
             lifecycle: NodeRuntimeState::Starting,
             started_at: now,
             peer_table: PeerTable::new(),
             formation: DiscoveryFormation::new(
                 crate::physical::PhysicalTransport::Ethernet,
-                signing_key,
+                signing_key.clone(),
             ),
             naming: NameRuntime::new(),
+            storage: StorageRuntime::new(node_id, signing_key),
             device,
             runtime_peers: HashMap::new(),
         }
