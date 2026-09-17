@@ -8,12 +8,13 @@ pub struct ContentId([u8; CONTENT_ID_LENGTH]);
 impl ContentId {
     pub fn from_bytes(bytes: &[u8]) -> Self {
         let digest = Sha256::digest(bytes);
-
         let mut output = [0u8; CONTENT_ID_LENGTH];
-
         output.copy_from_slice(&digest);
-
         Self(output)
+    }
+
+    pub const fn from_raw(bytes: [u8; CONTENT_ID_LENGTH]) -> Self {
+        Self(bytes)
     }
 
     pub fn as_bytes(&self) -> &[u8; CONTENT_ID_LENGTH] {
