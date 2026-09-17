@@ -62,7 +62,7 @@ pub use platform::{
     HostPaths, HostPlatform, RestartPolicy, ServiceLifecycle, ServiceSpec, ServiceStatus,
     ServiceSupervisor,
 };
-pub use runtime::{StorageRuntime, StorageRuntimeError, STORAGE_QUERY_TTL_SECONDS};
+pub use runtime::{STORAGE_QUERY_TTL_SECONDS, StorageRuntime, StorageRuntimeError};
 pub use security::{PrivacyContext, PrivacyToken, ReplayWindow, SecurityPolicy, SecurityProfile};
 pub use services::{
     BuildArtifact, DeploymentError, DeploymentPlan, SiteFile, prepare_upload, verify_artifact,
