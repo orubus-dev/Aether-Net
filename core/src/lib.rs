@@ -40,7 +40,7 @@ pub use storage::{
     AssemblyError, ChunkAssembler, ChunkDigest, ChunkId, ChunkRequest, ChunkStore, ChunkTransferRequest,
     ContentChunk, ContentId, ContentManifest, DistributedStorage, ManifestStore, ObjectChunk, ObjectManifest,
     ObjectStore, ObjectStoreError, PendingTransfer, ProviderAdvertisement, ProviderDirectory, RepairPlan,
-    RequestDeduplicator, StorageCodecError, StorageControl, StorageError, StorageRuntime, TransferDirection,
-    TransferGovernor, TransferId as StorageTransferId, TransferLimits, TransferQueue, MAX_ASSEMBLY_BYTES,
+    RequestDeduplicator, StorageCodecError, StorageControl, StorageError, StorageRuntime,
+    StorageTransferId, TransferGovernor, TransferLimits, TransferQueue, MAX_ASSEMBLY_BYTES,
     MAX_MANIFEST_PAGE_ENTRIES, MAX_STORAGE_FRAGMENT, MAX_STORAGE_MESSAGE, STORAGE_MAGIC, STORAGE_VERSION,
 };
