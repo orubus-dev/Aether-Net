@@ -6,7 +6,7 @@ use crate::naming_protocol::{NameQuery, NameResponse};
 use crate::network::NodeId;
 use crate::runtime::node::{NodeEvent, NodeEventLoop, NodeState};
 use crate::runtime::{CoreConfig, NameRuntimeError, StorageRuntimeError};
-use crate::storage::{ChunkDigest, ChunkId, ContentId, ObjectManifest, ProviderAdvertisement, StorageControl};
+use crate::storage::{ChunkDigest, ChunkId, ContentId, ObjectManifest, ProviderAdvertisement, RepairPlan, StorageControl};
 use crate::transport::{UdpTransport, UdpTransportError};
 use std::net::SocketAddr;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -42,6 +42,10 @@ impl AetherNodeRuntime {
     pub fn publish_storage_bytes(&mut self, bytes: &[u8]) -> Result<(ObjectManifest, ProviderAdvertisement), StorageRuntimeError> { self.state.storage.publish_bytes(bytes, unix_timestamp()) }
     pub fn begin_storage_manifest_query(&mut self, content: ContentId, start: u32) -> StorageControl { self.state.storage.begin_manifest_query(content, start) }
     pub fn begin_storage_chunk_query(&mut self, content: ContentId, chunk: ChunkId, offset: u32, length: u16, digest: ChunkDigest) -> StorageControl { self.state.storage.begin_chunk_query(content, chunk, offset, length, digest) }
+    pub fn storage_required_replicas(&self) -> usize { self.state.storage.required_replicas() }
+    pub fn set_storage_required_replicas(&mut self, count: usize) { self.state.storage.set_required_replicas(count); }
+    pub fn storage_replica_count(&self, content: ContentId) -> usize { self.state.storage.replica_count(content, unix_timestamp()) }
+    pub fn storage_repair_plan(&self, content: ContentId) -> RepairPlan { self.state.storage.repair_plan(content, unix_timestamp()) }
     pub fn stored_object_count(&self) -> usize { self.state.storage.object_count() }
     pub fn stored_chunk_count(&self) -> usize { self.state.storage.chunk_count() }
     pub fn stored_bytes(&self) -> u64 { self.state.storage.stored_bytes() }
