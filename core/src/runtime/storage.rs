@@ -58,18 +58,8 @@ pub struct StorageRuntime {
 
 impl StorageRuntime {
     pub fn new(node_id: NodeId, signing_key: DeviceSigningKey) -> Self {
-        Self {
-            node_id,
-            signing_key,
-            store: ObjectStore::new(),
-            providers: ProviderDirectory::new(),
-            governor: TransferGovernor::new(),
-            manifest_assemblies: Vec::new(),
-            chunk_assemblers: Vec::new(),
-            sequence: 1,
-        }
+        Self { node_id, signing_key, store: ObjectStore::new(), providers: ProviderDirectory::new(), governor: TransferGovernor::new(), manifest_assemblies: Vec::new(), chunk_assemblers: Vec::new(), sequence: 1 }
     }
-
     pub fn node_id(&self) -> NodeId { self.node_id }
     pub fn store(&self) -> &ObjectStore { &self.store }
     pub fn store_mut(&mut self) -> &mut ObjectStore { &mut self.store }
@@ -78,6 +68,9 @@ impl StorageRuntime {
     pub fn stored_bytes(&self) -> u64 { self.store.used_bytes() }
     pub fn object_count(&self) -> usize { self.store.manifest_count() }
     pub fn chunk_count(&self) -> usize { self.store.chunk_count() }
+    pub fn local_advertisements(&self, now: u64) -> Vec<ProviderAdvertisement> {
+        self.store.contents(now).into_iter().map(|content| self.local_advertisement(content, now)).collect()
+    }
 
     pub fn publish_bytes(&mut self, bytes: &[u8], now: u64) -> Result<(ObjectManifest, ProviderAdvertisement), StorageRuntimeError> {
         let manifest = self.store.put_object(bytes, crate::storage::chunk::DEFAULT_CHUNK_SIZE, self.sequence, now, crate::storage::object_store::DEFAULT_OBJECT_TTL_SECONDS).map_err(StorageRuntimeError::Object)?;
@@ -88,42 +81,23 @@ impl StorageRuntime {
     }
 
     pub fn local_advertisement(&self, content: ContentId, now: u64) -> ProviderAdvertisement {
-        let mut ad = ProviderAdvertisement {
-            content,
-            provider: self.node_id,
-            version: self.sequence,
-            capacity_bytes: self.store.max_bytes(),
-            cached_bytes: self.store.used_bytes(),
-            cost_micros: 0,
-            reliability_ppm: 1_000_000,
-            observed_at: now,
-            expires_at: now.saturating_add(DEFAULT_PROVIDER_TTL_SECONDS),
-            owner_public_key: self.signing_key.verifying_key().to_bytes(),
-            signature: [0; 64],
-        };
+        let mut ad = ProviderAdvertisement { content, provider: self.node_id, version: self.sequence, capacity_bytes: self.store.max_bytes(), cached_bytes: self.store.used_bytes(), cost_micros: 0, reliability_ppm: 1_000_000, observed_at: now, expires_at: now.saturating_add(DEFAULT_PROVIDER_TTL_SECONDS), owner_public_key: self.signing_key.verifying_key().to_bytes(), signature: [0; 64] };
         ad.signature = self.signing_key.sign(&ad.signing_bytes()).to_bytes();
         ad
     }
 
     pub fn accept_provider(&mut self, advertisement: ProviderAdvertisement, now: u64) -> Result<bool, StorageRuntimeError> {
-        if advertisement.provider == self.node_id || advertisement.expires_at <= now {
-            return Err(StorageRuntimeError::InvalidPeer);
-        }
+        if advertisement.provider == self.node_id || advertisement.expires_at <= now { return Err(StorageRuntimeError::InvalidPeer); }
         let derived = NodeId::from_bytes(*Fingerprint::from_domain(b"aether/node-id/v1", &advertisement.owner_public_key).as_bytes());
-        if derived != advertisement.provider || !advertisement.verify(now) {
-            return Err(StorageRuntimeError::ProviderRejected);
-        }
+        if derived != advertisement.provider || !advertisement.verify(now) { return Err(StorageRuntimeError::ProviderRejected); }
         self.providers.publish(advertisement, now).map_err(|_| StorageRuntimeError::ProviderRejected)
     }
 
     pub fn begin_manifest_query(&mut self, content: ContentId, start: u32) -> StorageControl {
-        let request_id = self.request_id(content.as_bytes(), start as u64);
-        StorageControl::GetManifest { request_id, content, start, limit: MAX_MANIFEST_PAGE_ENTRIES as u16 }
+        StorageControl::GetManifest { request_id: self.request_id(content.as_bytes(), start as u64), content, start, limit: MAX_MANIFEST_PAGE_ENTRIES as u16 }
     }
-
     pub fn begin_chunk_query(&mut self, content: ContentId, chunk: ChunkId, offset: u32, length: u16, digest: crate::storage::distributed::ChunkDigest) -> StorageControl {
-        let request_id = self.request_id(content.as_bytes(), chunk.0 ^ u64::from(offset));
-        StorageControl::GetChunk { request_id, content, chunk, offset, length: length.min(MAX_STORAGE_FRAGMENT as u16), digest }
+        StorageControl::GetChunk { request_id: self.request_id(content.as_bytes(), chunk.0 ^ u64::from(offset)), content, chunk, offset, length: length.min(MAX_STORAGE_FRAGMENT as u16), digest }
     }
 
     pub fn handle(&mut self, message: StorageControl, peer: NodeId, now_ms: u64, now: u64) -> Result<Vec<StorageControl>, StorageRuntimeError> {
@@ -132,39 +106,25 @@ impl StorageRuntime {
             StorageControl::GetManifest { request_id, content, start, limit } => {
                 let manifest = self.store.manifest(content, now).map_err(StorageRuntimeError::Object)?;
                 let begin = start as usize;
-                if begin > manifest.chunks.len() { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 4 }]); }
+                if begin >= manifest.chunks.len() { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 4 }]); }
                 let count = (limit as usize).clamp(1, MAX_MANIFEST_PAGE_ENTRIES);
                 let end = begin.saturating_add(count).min(manifest.chunks.len());
-                Ok(vec![StorageControl::ManifestPage {
-                    request_id,
-                    content,
-                    version: manifest.version,
-                    total_size: manifest.total_size,
-                    chunk_size: manifest.chunk_size,
-                    total_chunks: manifest.chunks.len() as u32,
-                    start,
-                    entries: manifest.chunks[begin..end].to_vec(),
-                    created_at: manifest.created_at,
-                    expires_at: manifest.expires_at,
-                }])
+                Ok(vec![StorageControl::ManifestPage { request_id, content, version: manifest.version, total_size: manifest.total_size, chunk_size: manifest.chunk_size, total_chunks: manifest.chunks.len() as u32, start, entries: manifest.chunks[begin..end].to_vec(), created_at: manifest.created_at, expires_at: manifest.expires_at }])
             }
             StorageControl::GetChunk { request_id, content, chunk, offset, length, digest } => {
+                let manifest = self.store.manifest(content, now).map_err(StorageRuntimeError::Object)?;
+                let expected = manifest.chunks.iter().find(|item| item.id == chunk).map(|item| item.digest).ok_or(StorageRuntimeError::Object(ObjectStoreError::ChunkNotFound))?;
+                if expected != digest { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 8 }]); }
                 let bytes = self.store.get_chunk(content, chunk, now).map_err(StorageRuntimeError::Object)?;
                 let start = offset as usize;
-                if start > bytes.len() || length == 0 {
-                    return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 5 }]);
-                }
+                if start >= bytes.len() || length == 0 { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 5 }]); }
                 let end = start.saturating_add(length as usize).min(bytes.len());
                 let payload = &bytes[start..end];
-                if !self.governor.allow(peer, TransferDirection::Upload, payload.len(), now_ms) {
-                    return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 6 }]);
-                }
-                Ok(vec![StorageControl::Chunk { request_id, content, chunk, offset, total_len: bytes.len() as u32, digest, payload: payload.to_vec() }])
+                if !self.governor.allow(peer, TransferDirection::Upload, payload.len(), now_ms) { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 6 }]); }
+                Ok(vec![StorageControl::Chunk { request_id, content, chunk, offset, total_len: bytes.len() as u32, digest: expected, payload: payload.to_vec() }])
             }
             StorageControl::PutChunk { request_id, content, chunk, offset, total_len, digest, payload, expires_at } => {
-                if !self.governor.allow(peer, TransferDirection::Download, payload.len(), now_ms) {
-                    return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 6 }]);
-                }
+                if !self.governor.allow(peer, TransferDirection::Download, payload.len(), now_ms) { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 6 }]); }
                 let index = match self.chunk_assemblers.iter().position(|item| item.request_id == request_id) {
                     Some(index) => index,
                     None => {
@@ -174,22 +134,17 @@ impl StorageRuntime {
                         self.chunk_assemblers.len() - 1
                     }
                 };
-                let pending = &mut self.chunk_assemblers[index];
-                pending.expires_at_ms = now_ms.saturating_add(STORAGE_TRANSFER_TTL_MS);
-                pending.assembler.write(offset as usize, &payload).map_err(StorageRuntimeError::Assembly)?;
-                if pending.assembler.complete() {
+                self.chunk_assemblers[index].expires_at_ms = now_ms.saturating_add(STORAGE_TRANSFER_TTL_MS);
+                self.chunk_assemblers[index].assembler.write(offset as usize, &payload).map_err(StorageRuntimeError::Assembly)?;
+                if self.chunk_assemblers[index].assembler.complete() {
                     let finished = self.chunk_assemblers.swap_remove(index);
                     let bytes = finished.assembler.finish().map_err(StorageRuntimeError::Assembly)?;
                     self.store.put_chunk(content, chunk, digest, &bytes, now, expires_at.max(now.saturating_add(1))).map_err(StorageRuntimeError::Object)?;
                     Ok(vec![StorageControl::Ack { request_id, accepted: true, code: 0 }])
-                } else {
-                    Ok(vec![StorageControl::Ack { request_id, accepted: true, code: 1 }])
-                }
+                } else { Ok(vec![StorageControl::Ack { request_id, accepted: true, code: 1 }]) }
             }
             StorageControl::Chunk { request_id, content, chunk, offset, total_len, digest, payload } => {
-                if !self.governor.allow(peer, TransferDirection::Download, payload.len(), now_ms) {
-                    return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 6 }]);
-                }
+                if !self.governor.allow(peer, TransferDirection::Download, payload.len(), now_ms) { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 6 }]); }
                 self.accept_chunk_fragment(request_id, content, chunk, offset, total_len, digest, payload, now, now_ms)?;
                 Ok(Vec::new())
             }
@@ -226,9 +181,7 @@ impl StorageRuntime {
     }
 
     fn accept_manifest_page(&mut self, request_id: [u8; 16], content: ContentId, version: u64, total_size: u64, chunk_size: u32, total_chunks: u32, start: u32, entries: Vec<crate::storage::object_store::ObjectChunk>, created_at: u64, expires_at: u64, now: u64, now_ms: u64) -> Result<(), StorageRuntimeError> {
-        if total_chunks == 0 || total_chunks as usize > MAX_ASSEMBLY_ENTRIES || start as usize + entries.len() > total_chunks as usize {
-            return Err(StorageRuntimeError::InvalidManifestPage);
-        }
+        if total_chunks == 0 || total_chunks as usize > MAX_ASSEMBLY_ENTRIES || start as usize + entries.len() > total_chunks as usize { return Err(StorageRuntimeError::InvalidManifestPage); }
         let index = match self.manifest_assemblies.iter().position(|item| item.request_id == request_id) {
             Some(index) => index,
             None => {
@@ -238,9 +191,7 @@ impl StorageRuntime {
             }
         };
         let assembly = &mut self.manifest_assemblies[index];
-        if assembly.content != content || assembly.version != version || assembly.total_size != total_size || assembly.chunk_size != chunk_size {
-            return Err(StorageRuntimeError::InvalidManifestPage);
-        }
+        if assembly.content != content || assembly.version != version || assembly.total_size != total_size || assembly.chunk_size != chunk_size { return Err(StorageRuntimeError::InvalidManifestPage); }
         for (offset, entry) in entries.into_iter().enumerate() {
             let slot = start as usize + offset;
             if assembly.entries[slot].is_none() {
@@ -265,7 +216,6 @@ impl StorageRuntime {
         self.chunk_assemblers.retain(|item| now_ms < item.expires_at_ms);
         self.manifest_assemblies.retain(|item| now_ms < item.expires_at_ms);
     }
-
     fn request_id(&self, content: &[u8; 32], salt: u64) -> [u8; 16] {
         let mut seed = Vec::with_capacity(40);
         seed.extend_from_slice(content);
