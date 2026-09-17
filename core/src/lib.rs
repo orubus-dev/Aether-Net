@@ -62,6 +62,7 @@ pub use platform::{
     HostPaths, HostPlatform, RestartPolicy, ServiceLifecycle, ServiceSpec, ServiceStatus,
     ServiceSupervisor,
 };
+pub use runtime::{StorageRuntime, StorageRuntimeError, STORAGE_QUERY_TTL_SECONDS};
 pub use security::{PrivacyContext, PrivacyToken, ReplayWindow, SecurityPolicy, SecurityProfile};
 pub use services::{
     BuildArtifact, DeploymentError, DeploymentPlan, SiteFile, prepare_upload, verify_artifact,
@@ -72,6 +73,6 @@ pub use storage::{
     MAX_ASSEMBLY_BYTES, MAX_MANIFEST_PAGE_ENTRIES, MAX_STORAGE_FRAGMENT, MAX_STORAGE_MESSAGE,
     ManifestStore, ObjectChunk, ObjectManifest, ObjectStore, ObjectStoreError, PendingTransfer,
     ProviderAdvertisement, ProviderDirectory, RepairPlan, RequestDeduplicator, STORAGE_MAGIC,
-    STORAGE_VERSION, StorageCodecError, StorageControl, StorageError, StorageRuntime,
-    TransferGovernor, TransferId as StorageTransferId, TransferLimits, TransferQueue,
+    STORAGE_VERSION, StorageCodecError, StorageControl, StorageError, TransferGovernor,
+    TransferId as StorageTransferId, TransferLimits, TransferQueue,
 };
