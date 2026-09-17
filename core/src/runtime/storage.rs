@@ -19,48 +19,26 @@ pub const MAX_REPLICATION_MESSAGES_PER_TICK: usize = 32;
 pub const REPLICATION_RETRY_MS: u64 = 60_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum StorageRuntimeError {
-    Codec(StorageCodecError),
-    Object(ObjectStoreError),
-    Assembly(AssemblyError),
-    ProviderRejected,
-    RequestCapacity,
-    InvalidPeer,
-    InvalidManifestPage,
-}
-
+pub enum StorageRuntimeError { Codec(StorageCodecError), Object(ObjectStoreError), Assembly(AssemblyError), ProviderRejected, RequestCapacity, InvalidPeer, InvalidManifestPage }
 struct ManifestAssembly {
     request_id: [u8; 16], content: ContentId, version: u64, total_size: u64, chunk_size: u32,
     total_chunks: u32, created_at: u64, expires_at: u64,
     entries: Vec<Option<crate::storage::object_store::ObjectChunk>>, received: usize, expires_at_ms: u64,
 }
 struct PendingAssembler { request_id: [u8; 16], assembler: ChunkAssembler, expires_at_ms: u64 }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ReplicationPhase { Manifest, Chunks, Complete }
 #[derive(Debug, Clone, Copy)]
 struct ReplicationJob { content: ContentId, target: NodeId, manifest_cursor: u32, chunk_index: u32, chunk_offset: u32, phase: ReplicationPhase, retry_at_ms: u64 }
 
 pub struct StorageRuntime {
-    node_id: NodeId,
-    signing_key: DeviceSigningKey,
-    store: ObjectStore,
-    providers: ProviderDirectory,
-    governor: TransferGovernor,
-    manifest_assemblies: Vec<ManifestAssembly>,
-    chunk_assemblers: Vec<PendingAssembler>,
-    replication_jobs: Vec<ReplicationJob>,
-    required_replicas: usize,
-    sequence: u64,
+    node_id: NodeId, signing_key: DeviceSigningKey, store: ObjectStore, providers: ProviderDirectory, governor: TransferGovernor,
+    manifest_assemblies: Vec<ManifestAssembly>, chunk_assemblers: Vec<PendingAssembler>, replication_jobs: Vec<ReplicationJob>,
+    required_replicas: usize, sequence: u64,
 }
-
 impl StorageRuntime {
     pub fn new(node_id: NodeId, signing_key: DeviceSigningKey) -> Self {
-        Self {
-            node_id, signing_key, store: ObjectStore::new(), providers: ProviderDirectory::new(), governor: TransferGovernor::new(),
-            manifest_assemblies: Vec::new(), chunk_assemblers: Vec::new(), replication_jobs: Vec::new(),
-            required_replicas: DEFAULT_REQUIRED_REPLICAS, sequence: 1,
-        }
+        Self { node_id, signing_key, store: ObjectStore::new(), providers: ProviderDirectory::new(), governor: TransferGovernor::new(), manifest_assemblies: Vec::new(), chunk_assemblers: Vec::new(), replication_jobs: Vec::new(), required_replicas: DEFAULT_REQUIRED_REPLICAS, sequence: 1 }
     }
     pub fn node_id(&self) -> NodeId { self.node_id }
     pub fn store(&self) -> &ObjectStore { &self.store }
@@ -72,15 +50,14 @@ impl StorageRuntime {
     pub fn chunk_count(&self) -> usize { self.store.chunk_count() }
     pub fn required_replicas(&self) -> usize { self.required_replicas }
     pub fn set_required_replicas(&mut self, count: usize) { self.required_replicas = count.max(1); }
+    pub fn replica_count(&self, content: ContentId, now: u64) -> usize {
+        self.providers.providers_for(content, now).filter(|item| item.provider != self.node_id).count().saturating_add(usize::from(self.store.has_object(content, now)))
+    }
     pub fn repair_plan(&self, content: ContentId, now: u64) -> RepairPlan {
-        let remote = self.providers.providers_for(content, now).filter(|item| item.provider != self.node_id).count();
-        let current = remote.saturating_add(usize::from(self.store.has_object(content, now)));
+        let current = self.replica_count(content, now);
         RepairPlan { content, required_replicas: self.required_replicas, selected_providers: self.providers.select(content, now, self.required_replicas.saturating_sub(1)), needs_repair: current < self.required_replicas }
     }
-    pub fn local_advertisements(&self, now: u64) -> Vec<ProviderAdvertisement> {
-        self.store.contents(now).into_iter().map(|content| self.local_advertisement(content, now)).collect()
-    }
-
+    pub fn local_advertisements(&self, now: u64) -> Vec<ProviderAdvertisement> { self.store.contents(now).into_iter().map(|content| self.local_advertisement(content, now)).collect() }
     pub fn publish_bytes(&mut self, bytes: &[u8], now: u64) -> Result<(ObjectManifest, ProviderAdvertisement), StorageRuntimeError> {
         let manifest = self.store.put_object(bytes, crate::storage::chunk::DEFAULT_CHUNK_SIZE, self.sequence, now, crate::storage::object_store::DEFAULT_OBJECT_TTL_SECONDS).map_err(StorageRuntimeError::Object)?;
         self.sequence = self.sequence.wrapping_add(1).max(1);
@@ -89,13 +66,8 @@ impl StorageRuntime {
         Ok((manifest, advertisement))
     }
     pub fn local_advertisement(&self, content: ContentId, now: u64) -> ProviderAdvertisement {
-        let mut ad = ProviderAdvertisement {
-            content, provider: self.node_id, version: self.sequence, capacity_bytes: self.store.max_bytes(), cached_bytes: self.store.used_bytes(),
-            cost_micros: 0, reliability_ppm: 1_000_000, observed_at: now, expires_at: now.saturating_add(DEFAULT_PROVIDER_TTL_SECONDS),
-            owner_public_key: self.signing_key.verifying_key().to_bytes(), signature: [0; 64],
-        };
-        ad.signature = self.signing_key.sign(&ad.signing_bytes()).to_bytes();
-        ad
+        let mut ad = ProviderAdvertisement { content, provider: self.node_id, version: self.sequence, capacity_bytes: self.store.max_bytes(), cached_bytes: self.store.used_bytes(), cost_micros: 0, reliability_ppm: 1_000_000, observed_at: now, expires_at: now.saturating_add(DEFAULT_PROVIDER_TTL_SECONDS), owner_public_key: self.signing_key.verifying_key().to_bytes(), signature: [0; 64] };
+        ad.signature = self.signing_key.sign(&ad.signing_bytes()).to_bytes(); ad
     }
     pub fn accept_provider(&mut self, advertisement: ProviderAdvertisement, now: u64) -> Result<bool, StorageRuntimeError> {
         if advertisement.provider == self.node_id || advertisement.expires_at <= now { return Err(StorageRuntimeError::InvalidPeer); }
@@ -103,19 +75,18 @@ impl StorageRuntime {
         if derived != advertisement.provider || !advertisement.verify(now) { return Err(StorageRuntimeError::ProviderRejected); }
         self.providers.publish(advertisement, now).map_err(|_| StorageRuntimeError::ProviderRejected)
     }
-    pub fn begin_manifest_query(&mut self, content: ContentId, start: u32) -> StorageControl {
-        StorageControl::GetManifest { request_id: self.request_id(content.as_bytes(), start as u64), content, start, limit: MAX_MANIFEST_PAGE_ENTRIES as u16 }
-    }
-    pub fn begin_chunk_query(&mut self, content: ContentId, chunk: ChunkId, offset: u32, length: u16, digest: crate::storage::distributed::ChunkDigest) -> StorageControl {
-        StorageControl::GetChunk { request_id: self.request_id(content.as_bytes(), chunk.0 ^ u64::from(offset)), content, chunk, offset, length: length.min(MAX_STORAGE_FRAGMENT as u16), digest }
-    }
+    pub fn begin_manifest_query(&mut self, content: ContentId, start: u32) -> StorageControl { StorageControl::GetManifest { request_id: self.request_id(content.as_bytes(), start as u64), content, start, limit: MAX_MANIFEST_PAGE_ENTRIES as u16 } }
+    pub fn begin_chunk_query(&mut self, content: ContentId, chunk: ChunkId, offset: u32, length: u16, digest: crate::storage::distributed::ChunkDigest) -> StorageControl { StorageControl::GetChunk { request_id: self.request_id(content.as_bytes(), chunk.0 ^ u64::from(offset)), content, chunk, offset, length: length.min(MAX_STORAGE_FRAGMENT as u16), digest } }
 
     pub fn replication_step(&mut self, peers: &[NodeId], now_ms: u64, now: u64) -> Vec<(NodeId, StorageControl)> {
         self.replication_jobs.retain(|job| self.store.has_object(job.content, now));
-        let local_contents = self.store.contents(now);
-        for content in local_contents {
-            let remote = self.providers.providers_for(content, now).filter(|item| item.provider != self.node_id).count();
-            let current = remote.saturating_add(1);
+        for job in &mut self.replication_jobs {
+            if job.phase == ReplicationPhase::Complete && now_ms >= job.retry_at_ms {
+                job.phase = ReplicationPhase::Manifest; job.manifest_cursor = 0; job.chunk_index = 0; job.chunk_offset = 0; job.retry_at_ms = now_ms;
+            }
+        }
+        for content in self.store.contents(now) {
+            let current = self.replica_count(content, now);
             if current >= self.required_replicas { continue; }
             let mut needed = self.required_replicas - current;
             let mut candidates: Vec<NodeId> = peers.iter().copied().filter(|peer| *peer != self.node_id).collect();
@@ -127,7 +98,6 @@ impl StorageRuntime {
                 needed -= 1;
             }
         }
-
         let mut output = Vec::with_capacity(MAX_REPLICATION_MESSAGES_PER_TICK);
         for index in 0..self.replication_jobs.len() {
             if output.len() >= MAX_REPLICATION_MESSAGES_PER_TICK { break; }
@@ -139,50 +109,25 @@ impl StorageRuntime {
                 match job.phase {
                     ReplicationPhase::Manifest => {
                         let start = job.manifest_cursor as usize;
-                        if start >= manifest.chunks.len() {
-                            self.replication_jobs[index].phase = ReplicationPhase::Chunks;
-                            self.replication_jobs[index].chunk_index = 0;
-                            self.replication_jobs[index].chunk_offset = 0;
-                            continue;
-                        }
+                        if start >= manifest.chunks.len() { self.replication_jobs[index].phase = ReplicationPhase::Chunks; continue; }
                         let end = start.saturating_add(MAX_MANIFEST_PAGE_ENTRIES).min(manifest.chunks.len());
-                        let message = StorageControl::ManifestPage {
-                            request_id: self.replication_request_id(job.content, job.target, 0, start as u64),
-                            content: job.content, version: manifest.version, total_size: manifest.total_size, chunk_size: manifest.chunk_size,
-                            total_chunks: manifest.chunks.len() as u32, start: start as u32, entries: manifest.chunks[start..end].to_vec(),
-                            created_at: manifest.created_at, expires_at: manifest.expires_at,
-                        };
+                        let message = StorageControl::ManifestPage { request_id: self.replication_request_id(job.content, job.target, 0, start as u64), content: job.content, version: manifest.version, total_size: manifest.total_size, chunk_size: manifest.chunk_size, total_chunks: manifest.chunks.len() as u32, start: start as u32, entries: manifest.chunks[start..end].to_vec(), created_at: manifest.created_at, expires_at: manifest.expires_at };
                         let cost = message.encode().map(|frame| frame.len()).unwrap_or(MAX_STORAGE_FRAGMENT);
                         if !self.governor.allow(job.target, TransferDirection::Upload, cost, now_ms) { break; }
-                        self.replication_jobs[index].manifest_cursor = end as u32;
-                        output.push((job.target, message));
+                        self.replication_jobs[index].manifest_cursor = end as u32; output.push((job.target, message));
                     }
                     ReplicationPhase::Chunks => {
-                        if job.chunk_index as usize >= manifest.chunks.len() {
-                            self.replication_jobs[index].phase = ReplicationPhase::Complete;
-                            self.replication_jobs[index].retry_at_ms = now_ms.saturating_add(REPLICATION_RETRY_MS);
-                            break;
-                        }
+                        if job.chunk_index as usize >= manifest.chunks.len() { self.replication_jobs[index].phase = ReplicationPhase::Complete; self.replication_jobs[index].retry_at_ms = now_ms.saturating_add(REPLICATION_RETRY_MS); break; }
                         let entry = &manifest.chunks[job.chunk_index as usize];
                         let Ok(bytes) = self.store.get_chunk(job.content, entry.id, now) else { break; };
                         let offset = job.chunk_offset as usize;
-                        if offset >= bytes.len() {
-                            self.replication_jobs[index].chunk_index = self.replication_jobs[index].chunk_index.saturating_add(1);
-                            self.replication_jobs[index].chunk_offset = 0;
-                            continue;
-                        }
+                        if offset >= bytes.len() { self.replication_jobs[index].chunk_index = self.replication_jobs[index].chunk_index.saturating_add(1); self.replication_jobs[index].chunk_offset = 0; continue; }
                         let end = offset.saturating_add(MAX_STORAGE_FRAGMENT).min(bytes.len());
-                        let message = StorageControl::PutChunk {
-                            request_id: self.replication_request_id(job.content, job.target, entry.id.0, 1), content: job.content, chunk: entry.id,
-                            offset: offset as u32, total_len: bytes.len() as u32, digest: entry.digest, payload: bytes[offset..end].to_vec(), expires_at: manifest.expires_at,
-                        };
+                        let message = StorageControl::PutChunk { request_id: self.replication_request_id(job.content, job.target, entry.id.0, 1), content: job.content, chunk: entry.id, offset: offset as u32, total_len: bytes.len() as u32, digest: entry.digest, payload: bytes[offset..end].to_vec(), expires_at: manifest.expires_at };
                         let cost = message.encode().map(|frame| frame.len()).unwrap_or(MAX_STORAGE_FRAGMENT);
                         if !self.governor.allow(job.target, TransferDirection::Upload, cost, now_ms) { break; }
                         self.replication_jobs[index].chunk_offset = end as u32;
-                        if end == bytes.len() {
-                            self.replication_jobs[index].chunk_index = self.replication_jobs[index].chunk_index.saturating_add(1);
-                            self.replication_jobs[index].chunk_offset = 0;
-                        }
+                        if end == bytes.len() { self.replication_jobs[index].chunk_index = self.replication_jobs[index].chunk_index.saturating_add(1); self.replication_jobs[index].chunk_offset = 0; }
                         output.push((job.target, message));
                     }
                     ReplicationPhase::Complete => break,
@@ -197,21 +142,17 @@ impl StorageRuntime {
         match message {
             StorageControl::GetManifest { request_id, content, start, limit } => {
                 let manifest = self.store.manifest(content, now).map_err(StorageRuntimeError::Object)?;
-                let begin = start as usize;
-                if begin >= manifest.chunks.len() { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 4 }]); }
-                let count = (limit as usize).clamp(1, MAX_MANIFEST_PAGE_ENTRIES);
-                let end = begin.saturating_add(count).min(manifest.chunks.len());
+                let begin = start as usize; if begin >= manifest.chunks.len() { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 4 }]); }
+                let end = begin.saturating_add((limit as usize).clamp(1, MAX_MANIFEST_PAGE_ENTRIES)).min(manifest.chunks.len());
                 Ok(vec![StorageControl::ManifestPage { request_id, content, version: manifest.version, total_size: manifest.total_size, chunk_size: manifest.chunk_size, total_chunks: manifest.chunks.len() as u32, start, entries: manifest.chunks[begin..end].to_vec(), created_at: manifest.created_at, expires_at: manifest.expires_at }])
             }
             StorageControl::GetChunk { request_id, content, chunk, offset, length, digest } => {
                 let manifest = self.store.manifest(content, now).map_err(StorageRuntimeError::Object)?;
                 let expected = manifest.chunks.iter().find(|item| item.id == chunk).map(|item| item.digest).ok_or(StorageRuntimeError::Object(ObjectStoreError::ChunkNotFound))?;
                 if expected != digest { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 8 }]); }
-                let bytes = self.store.get_chunk(content, chunk, now).map_err(StorageRuntimeError::Object)?;
-                let start = offset as usize;
+                let bytes = self.store.get_chunk(content, chunk, now).map_err(StorageRuntimeError::Object)?; let start = offset as usize;
                 if start >= bytes.len() || length == 0 { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 5 }]); }
-                let end = start.saturating_add(length as usize).min(bytes.len());
-                let payload = &bytes[start..end];
+                let end = start.saturating_add(length as usize).min(bytes.len()); let payload = &bytes[start..end];
                 if !self.governor.allow(peer, TransferDirection::Upload, payload.len(), now_ms) { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 6 }]); }
                 Ok(vec![StorageControl::Chunk { request_id, content, chunk, offset, total_len: bytes.len() as u32, digest: expected, payload: payload.to_vec() }])
             }
@@ -219,36 +160,19 @@ impl StorageRuntime {
                 if !self.governor.allow(peer, TransferDirection::Download, payload.len(), now_ms) { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 6 }]); }
                 let index = match self.chunk_assemblers.iter().position(|item| item.request_id == request_id) {
                     Some(index) => index,
-                    None => {
-                        if self.chunk_assemblers.len() >= 1024 { return Err(StorageRuntimeError::RequestCapacity); }
-                        let assembler = ChunkAssembler::new(content, chunk, total_len as usize, digest).map_err(StorageRuntimeError::Assembly)?;
-                        self.chunk_assemblers.push(PendingAssembler { request_id, assembler, expires_at_ms: now_ms.saturating_add(STORAGE_TRANSFER_TTL_MS) });
-                        self.chunk_assemblers.len() - 1
-                    }
+                    None => { if self.chunk_assemblers.len() >= 1024 { return Err(StorageRuntimeError::RequestCapacity); } let assembler = ChunkAssembler::new(content, chunk, total_len as usize, digest).map_err(StorageRuntimeError::Assembly)?; self.chunk_assemblers.push(PendingAssembler { request_id, assembler, expires_at_ms: now_ms.saturating_add(STORAGE_TRANSFER_TTL_MS) }); self.chunk_assemblers.len() - 1 }
                 };
                 self.chunk_assemblers[index].expires_at_ms = now_ms.saturating_add(STORAGE_TRANSFER_TTL_MS);
                 self.chunk_assemblers[index].assembler.write(offset as usize, &payload).map_err(StorageRuntimeError::Assembly)?;
                 let complete = self.chunk_assemblers[index].assembler.complete();
-                if complete {
-                    let finished = self.chunk_assemblers.swap_remove(index);
-                    let bytes = finished.assembler.finish().map_err(StorageRuntimeError::Assembly)?;
-                    self.store.put_chunk(content, chunk, digest, &bytes, now, expires_at.max(now.saturating_add(1))).map_err(StorageRuntimeError::Object)?;
-                    Ok(vec![StorageControl::Ack { request_id, accepted: true, code: 0 }])
-                } else { Ok(vec![StorageControl::Ack { request_id, accepted: true, code: 1 }]) }
+                if complete { let finished = self.chunk_assemblers.swap_remove(index); let bytes = finished.assembler.finish().map_err(StorageRuntimeError::Assembly)?; self.store.put_chunk(content, chunk, digest, &bytes, now, expires_at.max(now.saturating_add(1))).map_err(StorageRuntimeError::Object)?; Ok(vec![StorageControl::Ack { request_id, accepted: true, code: 0 }]) } else { Ok(vec![StorageControl::Ack { request_id, accepted: true, code: 1 }]) }
             }
             StorageControl::Chunk { request_id, content, chunk, offset, total_len, digest, payload } => {
                 if !self.governor.allow(peer, TransferDirection::Download, payload.len(), now_ms) { return Ok(vec![StorageControl::Ack { request_id, accepted: false, code: 6 }]); }
-                self.accept_chunk_fragment(request_id, content, chunk, offset, total_len, digest, payload, now, now_ms)?;
-                Ok(Vec::new())
+                self.accept_chunk_fragment(request_id, content, chunk, offset, total_len, digest, payload, now, now_ms)?; Ok(Vec::new())
             }
-            StorageControl::ManifestPage { request_id, content, version, total_size, chunk_size, total_chunks, start, entries, created_at, expires_at } => {
-                self.accept_manifest_page(request_id, content, version, total_size, chunk_size, total_chunks, start, entries, created_at, expires_at, now, now_ms)?;
-                Ok(Vec::new())
-            }
-            StorageControl::ProviderAnnouncement(advertisement) => {
-                let accepted = self.accept_provider(advertisement, now)?;
-                Ok(vec![StorageControl::Ack { request_id: [0; 16], accepted, code: if accepted { 0 } else { 7 } }])
-            }
+            StorageControl::ManifestPage { request_id, content, version, total_size, chunk_size, total_chunks, start, entries, created_at, expires_at } => { self.accept_manifest_page(request_id, content, version, total_size, chunk_size, total_chunks, start, entries, created_at, expires_at, now, now_ms)?; Ok(Vec::new()) }
+            StorageControl::ProviderAnnouncement(advertisement) => { let accepted = self.accept_provider(advertisement, now)?; Ok(vec![StorageControl::Ack { request_id: [0; 16], accepted, code: if accepted { 0 } else { 7 } }]) }
             StorageControl::Ack { .. } => Ok(Vec::new()),
         }
     }
@@ -256,21 +180,11 @@ impl StorageRuntime {
     fn accept_chunk_fragment(&mut self, request_id: [u8; 16], content: ContentId, chunk: ChunkId, offset: u32, total_len: u32, digest: crate::storage::distributed::ChunkDigest, payload: Vec<u8>, now: u64, now_ms: u64) -> Result<(), StorageRuntimeError> {
         let index = match self.chunk_assemblers.iter().position(|item| item.request_id == request_id) {
             Some(index) => index,
-            None => {
-                if self.chunk_assemblers.len() >= 1024 { return Err(StorageRuntimeError::RequestCapacity); }
-                let assembler = ChunkAssembler::new(content, chunk, total_len as usize, digest).map_err(StorageRuntimeError::Assembly)?;
-                self.chunk_assemblers.push(PendingAssembler { request_id, assembler, expires_at_ms: now_ms.saturating_add(STORAGE_TRANSFER_TTL_MS) });
-                self.chunk_assemblers.len() - 1
-            }
+            None => { if self.chunk_assemblers.len() >= 1024 { return Err(StorageRuntimeError::RequestCapacity); } let assembler = ChunkAssembler::new(content, chunk, total_len as usize, digest).map_err(StorageRuntimeError::Assembly)?; self.chunk_assemblers.push(PendingAssembler { request_id, assembler, expires_at_ms: now_ms.saturating_add(STORAGE_TRANSFER_TTL_MS) }); self.chunk_assemblers.len() - 1 }
         };
-        self.chunk_assemblers[index].assembler.write(offset as usize, &payload).map_err(StorageRuntimeError::Assembly)?;
-        self.chunk_assemblers[index].expires_at_ms = now_ms.saturating_add(STORAGE_TRANSFER_TTL_MS);
+        self.chunk_assemblers[index].assembler.write(offset as usize, &payload).map_err(StorageRuntimeError::Assembly)?; self.chunk_assemblers[index].expires_at_ms = now_ms.saturating_add(STORAGE_TRANSFER_TTL_MS);
         let complete = self.chunk_assemblers[index].assembler.complete();
-        if complete {
-            let pending = self.chunk_assemblers.swap_remove(index);
-            let bytes = pending.assembler.finish().map_err(StorageRuntimeError::Assembly)?;
-            self.store.put_chunk(content, chunk, digest, &bytes, now, now.saturating_add(crate::storage::object_store::DEFAULT_OBJECT_TTL_SECONDS)).map_err(StorageRuntimeError::Object)?;
-        }
+        if complete { let pending = self.chunk_assemblers.swap_remove(index); let bytes = pending.assembler.finish().map_err(StorageRuntimeError::Assembly)?; self.store.put_chunk(content, chunk, digest, &bytes, now, now.saturating_add(crate::storage::object_store::DEFAULT_OBJECT_TTL_SECONDS)).map_err(StorageRuntimeError::Object)?; }
         Ok(())
     }
 
@@ -278,56 +192,74 @@ impl StorageRuntime {
         if total_chunks == 0 || total_chunks as usize > MAX_ASSEMBLY_ENTRIES || start as usize + entries.len() > total_chunks as usize { return Err(StorageRuntimeError::InvalidManifestPage); }
         let index = match self.manifest_assemblies.iter().position(|item| item.request_id == request_id) {
             Some(index) => index,
-            None => {
-                if self.manifest_assemblies.len() >= MAX_MANIFEST_ASSEMBLIES { return Err(StorageRuntimeError::RequestCapacity); }
-                self.manifest_assemblies.push(ManifestAssembly { request_id, content, version, total_size, chunk_size, total_chunks, created_at, expires_at, entries: vec![None; total_chunks as usize], received: 0, expires_at_ms: now_ms.saturating_add(STORAGE_TRANSFER_TTL_MS) });
-                self.manifest_assemblies.len() - 1
-            }
+            None => { if self.manifest_assemblies.len() >= MAX_MANIFEST_ASSEMBLIES { return Err(StorageRuntimeError::RequestCapacity); } self.manifest_assemblies.push(ManifestAssembly { request_id, content, version, total_size, chunk_size, total_chunks, created_at, expires_at, entries: vec![None; total_chunks as usize], received: 0, expires_at_ms: now_ms.saturating_add(STORAGE_TRANSFER_TTL_MS) }); self.manifest_assemblies.len() - 1 }
         };
         let complete_now = {
             let assembly = &mut self.manifest_assemblies[index];
             if assembly.content != content || assembly.version != version || assembly.total_size != total_size || assembly.chunk_size != chunk_size { return Err(StorageRuntimeError::InvalidManifestPage); }
-            for (offset, entry) in entries.into_iter().enumerate() {
-                let slot = start as usize + offset;
-                if assembly.entries[slot].is_none() {
-                    if entry.id.0 != slot as u64 { return Err(StorageRuntimeError::InvalidManifestPage); }
-                    assembly.entries[slot] = Some(entry);
-                    assembly.received += 1;
-                }
-            }
-            assembly.expires_at_ms = now_ms.saturating_add(STORAGE_TRANSFER_TTL_MS);
-            assembly.received == assembly.total_chunks as usize
+            for (offset, entry) in entries.into_iter().enumerate() { let slot = start as usize + offset; if assembly.entries[slot].is_none() { if entry.id.0 != slot as u64 { return Err(StorageRuntimeError::InvalidManifestPage); } assembly.entries[slot] = Some(entry); assembly.received += 1; } }
+            assembly.expires_at_ms = now_ms.saturating_add(STORAGE_TRANSFER_TTL_MS); assembly.received == assembly.total_chunks as usize
         };
-        if complete_now {
-            let complete = self.manifest_assemblies.swap_remove(index);
-            let chunks = complete.entries.into_iter().map(|item| item.ok_or(StorageRuntimeError::InvalidManifestPage)).collect::<Result<Vec<_>, _>>()?;
-            let manifest = ObjectManifest { content: complete.content, total_size: complete.total_size, chunk_size: complete.chunk_size, chunks, version: complete.version, created_at: complete.created_at, expires_at: complete.expires_at };
-            self.store.publish_manifest(manifest, now).map_err(StorageRuntimeError::Object)?;
-        }
+        if complete_now { let complete = self.manifest_assemblies.swap_remove(index); let chunks = complete.entries.into_iter().map(|item| item.ok_or(StorageRuntimeError::InvalidManifestPage)).collect::<Result<Vec<_>, _>>()?; let manifest = ObjectManifest { content: complete.content, total_size: complete.total_size, chunk_size: complete.chunk_size, chunks, version: complete.version, created_at: complete.created_at, expires_at: complete.expires_at }; self.store.publish_manifest(manifest, now).map_err(StorageRuntimeError::Object)?; }
         Ok(())
     }
 
     pub fn gc(&mut self, now_ms: u64, now: u64) {
-        self.store.remove_expired(now);
-        self.providers.expire(now);
-        self.chunk_assemblers.retain(|item| now_ms < item.expires_at_ms);
-        self.manifest_assemblies.retain(|item| now_ms < item.expires_at_ms);
-        self.replication_jobs.retain(|job| self.store.has_object(job.content, now));
+        self.store.remove_expired(now); self.providers.expire(now); self.chunk_assemblers.retain(|item| now_ms < item.expires_at_ms); self.manifest_assemblies.retain(|item| now_ms < item.expires_at_ms); self.replication_jobs.retain(|job| self.store.has_object(job.content, now));
+    }
+    fn request_id(&self, content: &[u8; 32], salt: u64) -> [u8; 16] { let mut seed = Vec::with_capacity(40); seed.extend_from_slice(content); seed.extend_from_slice(&salt.to_be_bytes()); self.request_id_seed(&seed) }
+    fn replication_request_id(&self, content: ContentId, target: NodeId, chunk: u64, tag: u64) -> [u8; 16] { let mut seed = Vec::with_capacity(80); seed.extend_from_slice(content.as_bytes()); seed.extend_from_slice(target.as_bytes()); seed.extend_from_slice(&chunk.to_be_bytes()); seed.extend_from_slice(&tag.to_be_bytes()); self.request_id_seed(&seed) }
+    fn request_id_seed(&self, seed: &[u8]) -> [u8; 16] { let digest = Fingerprint::from_domain(b"aether:storage-request:v1", seed); let mut output = [0u8; 16]; output.copy_from_slice(&digest.as_bytes()[..16]); output }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::identity::device::{generate_device, DeviceSigningKey};
+
+    fn runtime(created_at: u64) -> StorageRuntime {
+        let (key, device) = generate_device(created_at).expect("device generation");
+        StorageRuntime::new(NodeId::from_device(&device), key)
     }
 
-    fn request_id(&self, content: &[u8; 32], salt: u64) -> [u8; 16] {
-        let mut seed = Vec::with_capacity(40);
-        seed.extend_from_slice(content);
-        seed.extend_from_slice(&salt.to_be_bytes());
-        self.request_id_seed(&seed)
+    #[test]
+    fn replication_moves_manifest_and_chunks_between_nodes() {
+        let mut origin = runtime(1);
+        let mut replica = runtime(1);
+        origin.set_required_replicas(2);
+        let data = vec![7u8; crate::storage::chunk::MIN_CHUNK_SIZE + 2048];
+        let (manifest, advertisement) = origin.publish_bytes(&data, 10).expect("publish");
+        let replica_id = replica.node_id();
+        let origin_id = origin.node_id();
+        let messages = origin.replication_step(&[replica_id], 0, 10);
+        assert!(!messages.is_empty());
+        for (_, message) in messages { let _ = replica.handle(message, origin_id, 0, 10).expect("replication message"); }
+        assert!(replica.store().has_object(manifest.content, 20));
+        assert_eq!(replica.store_mut().assemble(manifest.content, 20).expect("assembled object"), data);
+        let replica_ad = replica.local_advertisement(manifest.content, 20);
+        assert!(origin.accept_provider(replica_ad, 20).expect("provider"));
+        assert_eq!(origin.replica_count(manifest.content, 20), 2);
+        assert!(advertisement.verify(20));
     }
-    fn replication_request_id(&self, content: ContentId, target: NodeId, chunk: u64, tag: u64) -> [u8; 16] {
-        let mut seed = Vec::with_capacity(80);
-        seed.extend_from_slice(content.as_bytes()); seed.extend_from_slice(target.as_bytes()); seed.extend_from_slice(&chunk.to_be_bytes()); seed.extend_from_slice(&tag.to_be_bytes());
-        self.request_id_seed(&seed)
-    }
-    fn request_id_seed(&self, seed: &[u8]) -> [u8; 16] {
-        let digest = Fingerprint::from_domain(b"aether:storage-request:v1", seed);
-        let mut output = [0u8; 16]; output.copy_from_slice(&digest.as_bytes()[..16]); output
+
+    #[test]
+    fn provider_expiry_triggers_repair_to_another_peer() {
+        let mut origin = runtime(1);
+        let mut lost = runtime(1);
+        let mut replacement = runtime(1);
+        origin.set_required_replicas(2);
+        let data = vec![8u8; crate::storage::chunk::MIN_CHUNK_SIZE + 1024];
+        let (manifest, _) = origin.publish_bytes(&data, 10).expect("publish");
+        let lost_id = lost.node_id(); let replacement_id = replacement.node_id(); let origin_id = origin.node_id();
+        for (_, message) in origin.replication_step(&[lost_id, replacement_id], 0, 10) { let _ = lost.handle(message, origin_id, 0, 10); }
+        let lost_ad = lost.local_advertisement(manifest.content, 10);
+        assert!(origin.accept_provider(lost_ad, 10).expect("lost provider"));
+        assert_eq!(origin.replica_count(manifest.content, 10), 2);
+        origin.gc(1, 311);
+        assert_eq!(origin.replica_count(manifest.content, 311), 1);
+        let repair = origin.replication_step(&[lost_id, replacement_id], 1000, 311);
+        assert!(!repair.is_empty());
+        for (_, message) in repair { let _ = replacement.handle(message, origin_id, 1000, 311); }
+        assert_eq!(replacement.store_mut().assemble(manifest.content, 320).expect("repaired object"), data);
     }
 }
