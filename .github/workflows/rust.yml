@@ -2,7 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - phase-8-storage
   pull_request:
     branches: [main]
 
