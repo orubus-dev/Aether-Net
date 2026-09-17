@@ -41,6 +41,6 @@ pub use storage::{
     ContentChunk, ContentId, ContentManifest, DistributedStorage, ManifestStore, ObjectChunk, ObjectManifest,
     ObjectStore, ObjectStoreError, PendingTransfer, ProviderAdvertisement, ProviderDirectory, RepairPlan,
     RequestDeduplicator, StorageCodecError, StorageControl, StorageError, StorageRuntime,
-    StorageTransferId, TransferGovernor, TransferLimits, TransferQueue, MAX_ASSEMBLY_BYTES,
+    TransferGovernor, TransferLimits, TransferQueue, TransferId as StorageTransferId, MAX_ASSEMBLY_BYTES,
     MAX_MANIFEST_PAGE_ENTRIES, MAX_STORAGE_FRAGMENT, MAX_STORAGE_MESSAGE, STORAGE_MAGIC, STORAGE_VERSION,
 };
