@@ -10,6 +10,7 @@ pub mod native_plane;
 pub mod native_stack;
 pub mod node;
 pub mod peers;
+pub mod storage;
 
 pub use config::CoreConfig;
 pub use data_plane::{DataPlaneError, EncryptedDataPlane};
@@ -39,3 +40,4 @@ pub use peers::{
     PeerSession, PeerSessionRegistry, PeerTable, RuntimePeer, RuntimePeerSession, RuntimePeerState,
     RuntimeSessionState, SessionPolicy, SessionRegistryError,
 };
+pub use storage::{StorageRuntime, StorageRuntimeError, STORAGE_QUERY_TTL_SECONDS};
