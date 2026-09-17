@@ -40,4 +40,4 @@ pub use peers::{
     PeerSession, PeerSessionRegistry, PeerTable, RuntimePeer, RuntimePeerSession, RuntimePeerState,
     RuntimeSessionState, SessionPolicy, SessionRegistryError,
 };
-pub use storage::{StorageRuntime, StorageRuntimeError, STORAGE_QUERY_TTL_SECONDS};
+pub use storage::{STORAGE_QUERY_TTL_SECONDS, StorageRuntime, StorageRuntimeError};
