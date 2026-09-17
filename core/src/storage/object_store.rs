@@ -120,7 +120,7 @@ impl ObjectStore {
     pub fn contents(&self, now: u64) -> Vec<ContentId> {
         self.manifests
             .iter()
-            .filter(|item| now < item.manifest.expires_at)
+            .filter(|item| now < item.manifest.expires_at && self.is_complete(item.manifest.content, now))
             .map(|item| item.manifest.content)
             .collect()
     }
@@ -296,6 +296,9 @@ impl ObjectStore {
     }
 
     pub fn assemble(&mut self, content: ContentId, now: u64) -> Result<Vec<u8>, ObjectStoreError> {
+        if !self.is_complete(content, now) {
+            return Err(ObjectStoreError::ObjectIncomplete);
+        }
         let manifest = self.manifest(content, now)?;
         let mut output = Vec::with_capacity(manifest.total_size as usize);
         for chunk in &manifest.chunks {
@@ -313,6 +316,27 @@ impl ObjectStore {
         Ok(output)
     }
 
+    pub fn is_complete(&self, content: ContentId, now: u64) -> bool {
+        let Some(manifest) = self
+            .manifests
+            .iter()
+            .find(|item| item.manifest.content == content && now < item.manifest.expires_at)
+            .map(|item| &item.manifest)
+        else {
+            return false;
+        };
+        manifest.chunks.iter().all(|expected| {
+            self.chunks.iter().any(|stored| {
+                stored.content == content
+                    && stored.id == expected.id
+                    && now < stored.expires_at
+                    && stored.bytes.len() == expected.length as usize
+                    && stored.digest == expected.digest
+                    && ChunkDigest::of(content, expected.id, &stored.bytes) == expected.digest
+            })
+        })
+    }
+
     pub fn remove_expired(&mut self, now: u64) -> (usize, usize) {
         let before_chunks = self.chunks.len();
         self.chunks.retain(|item| now < item.expires_at);
@@ -325,7 +349,7 @@ impl ObjectStore {
         )
     }
     pub fn has_object(&self, content: ContentId, now: u64) -> bool {
-        self.manifest(content, now).is_ok()
+        self.is_complete(content, now)
     }
     fn ensure_capacity(&mut self, bytes: u64, chunks: usize) -> Result<(), ObjectStoreError> {
         while self.used_bytes.saturating_add(bytes) > self.max_bytes
@@ -370,6 +394,7 @@ mod tests {
         let data = vec![9u8; MIN_CHUNK_SIZE + 17];
         let mut store = ObjectStore::with_limits(8, 8, 4 * MIN_CHUNK_SIZE as u64);
         let manifest = store.put_object(&data, MIN_CHUNK_SIZE, 1, 10, 100).unwrap();
+        assert!(store.is_complete(manifest.content, 20));
         assert_eq!(store.assemble(manifest.content, 20).unwrap(), data);
     }
     #[test]
@@ -378,9 +403,6 @@ mod tests {
         let content = ContentId::from_bytes(b"x");
         let id = ChunkId(0);
         let digest = ChunkDigest::of(content, id, b"good");
-        assert_eq!(
-            store.put_chunk(content, id, digest, b"bad", 1, 10),
-            Err(ObjectStoreError::IntegrityFailure)
-        );
+        assert_eq!(store.put_chunk(content, id, digest, b"bad", 1, 10), Err(ObjectStoreError::IntegrityFailure));
     }
 }
