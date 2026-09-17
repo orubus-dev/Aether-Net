@@ -28,7 +28,7 @@ pub struct ObjectManifest {
 
 impl ObjectManifest {
     pub fn validate(&self, now: u64) -> Result<(), ObjectStoreError> {
-        if self.chunk_size as usize < MIN_CHUNK_SIZE || self.chunk_size as usize > MAX_CHUNK_SIZE {
+        if !(MIN_CHUNK_SIZE..=MAX_CHUNK_SIZE).contains(&(self.chunk_size as usize)) {
             return Err(ObjectStoreError::InvalidManifest);
         }
         if self.expires_at <= now || self.expires_at <= self.created_at {
@@ -198,9 +198,7 @@ impl ObjectStore {
         self.manifests.retain(|item| now < item.manifest.expires_at);
         (before_chunks.saturating_sub(self.chunks.len()), before_manifests.saturating_sub(self.manifests.len()))
     }
-
     pub fn has_object(&self, content: ContentId, now: u64) -> bool { self.manifest(content, now).is_ok() }
-
     fn ensure_capacity(&mut self, bytes: u64, chunks: usize) -> Result<(), ObjectStoreError> {
         while self.used_bytes.saturating_add(bytes) > self.max_bytes || self.chunks.len().saturating_add(chunks) > self.max_chunks {
             let Some(index) = self.chunks.iter().enumerate().min_by_key(|(_, item)| item.last_access).map(|(i, _)| i) else { break; };
@@ -212,7 +210,6 @@ impl ObjectStore {
     }
     fn evict_oldest_manifest(&mut self) { if !self.manifests.is_empty() { self.manifests.remove(0); } }
 }
-
 impl Default for ObjectStore { fn default() -> Self { Self::new() } }
 
 #[cfg(test)]
