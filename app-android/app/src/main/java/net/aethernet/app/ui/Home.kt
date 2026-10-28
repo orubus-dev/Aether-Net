@@ -540,7 +540,7 @@ private fun claimFlow(identity: Identity, handle: String?, token: String): Strin
                 if (attempt != identity.counter) NetGraph.rederiveWithCounter(attempt)
                 if (!handle.isNullOrEmpty()) {
                     val h = client.claimHandle(handle, number.plain)
-                    NetGraph.setHandle(handle)
+                    NetGraph.updateHandle(handle)
                     return when (h) {
                         is RegistryClient.ClaimResult.Claimed ->
                             "${number.display} + $handle@${identity.tier.domainSuffix} claimed"

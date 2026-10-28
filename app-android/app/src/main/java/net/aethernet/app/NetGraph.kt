@@ -48,7 +48,7 @@ object NetGraph {
         return identity
     }
 
-    fun setHandle(h: String?) {
+    fun updateHandle(h: String?) {
         handle = h
         identity?.let { identityStore.save(it, h) }
     }
