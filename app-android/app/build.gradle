@@ -1,0 +1,79 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'net.aethernet.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "net.aethernet.app"
+        minSdk 26
+        targetSdk 34
+        versionCode rootProject.ext.appVersionCode
+        versionName rootProject.ext.appVersionName
+    }
+
+    signingConfigs {
+        release {
+            // CI injects these via env (GitHub Actions secrets). Missing env
+            // = unsigned local build — assembleRelease still succeeds.
+            def ksPath = System.getenv('AETHERNET_KEYSTORE')
+            if (ksPath != null && !ksPath.isBlank()) {
+                storeFile file(ksPath)
+                storePassword System.getenv('AETHERNET_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('AETHERNET_KEY_ALIAS')
+                keyPassword System.getenv('AETHERNET_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            if (System.getenv('AETHERNET_KEYSTORE') != null && !System.getenv('AETHERNET_KEYSTORE').isBlank()) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    buildFeatures {
+        compose true
+    }
+    composeOptions {
+        kotlinCompilerExtensionVersion '1.5.11'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+    packagingOptions {
+        resources {
+            excludes += ['META-INF/AL2.0', 'META-INF/LGPL2.1']
+        }
+    }
+}
+
+dependencies {
+    def composeBom = platform('androidx.compose:compose-bom:2024.05.00')
+    implementation composeBom
+
+    implementation 'androidx.core:core-ktx:1.13.1'
+    implementation 'androidx.activity:activity-compose:1.9.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.material:material-icons-core'
+
+    // AetherNet crypto: Ed25519 identity, Ed->Curve conversion, beforenm
+    // shared keys, XChaCha20-Poly1305-IETF AEAD, BLAKE2b number derivation.
+    implementation 'com.goterl:lazysodium-android:5.1.0@aar'
+    implementation 'net.java.dev.jna:jna:5.13.0@aar'
+}

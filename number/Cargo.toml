@@ -1,0 +1,16 @@
+[package]
+name = "aether-number"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+description = "AetherNet number allocation: tiered, key-derived, collision-checked device numbers"
+
+[dependencies]
+blake2 = "0.10.6"
+ed25519-dalek = "3.0.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+rand = "0.8"

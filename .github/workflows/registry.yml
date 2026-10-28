@@ -1,0 +1,20 @@
+name: Registry
+
+on:
+  push:
+    branches: [main]
+    paths: ['registry/**', 'tools/verify_registry.py', 'number/**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify number registry
+        run: python3 tools/verify_registry.py

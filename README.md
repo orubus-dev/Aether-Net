@@ -49,6 +49,34 @@ host boundary with persistent state/config/runtime/log directories, restart poli
 tracking, clean shutdown signaling, and a Linux systemd unit. Windows host integration
 uses the same platform boundary and is the next platform-certification track.
 
+## The app
+
+`app-android/` — the AetherNet client (Android, Liquid Glass UI, icy-blue accent):
+
+- **Identity**: Ed25519 keypair generated on-device; the tiered number
+  (500/700/900) is *derived from the key*, not allocated —
+  `number/src/lib.rs`, the app, and the registry verifier implement the same
+  derivation byte-for-byte.
+- **Registry**: atomic GitHub claims (`registry/`) — two devices can never
+  hold the same number; on the astronomically rare collision the app bumps
+  its counter and re-derives. CI re-proves every published number from its
+  key on every push.
+- **Talk layer v0** (`docs/talk-layer-v0.md`): encrypted LAN beacons +
+  XChaCha20-Poly1305-IETF direct messages with store-and-forward spooling.
+- **Relay**: a foreground service keeps the phone acting as a node — your
+  phone is the tower.
+
+Windows and Linux clients follow the same identity/number/registry contracts.
+
+## Build the app
+
+CI does it on every push to `app-android/**` (`.github/workflows/android.yml`),
+signs with the release keystore, and publishes the APK to Releases:
+
+```bash
+gradle -p app-android assembleRelease
+```
+
 ## Production boundary
 
 The network protocol core is intentionally separated from OS-specific mechanisms.

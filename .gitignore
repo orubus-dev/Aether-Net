@@ -41,3 +41,9 @@ temp/
 # Added by cargo
 
 /target
+
+# Android
+app-android/.gradle/
+app-android/build/
+app-android/app/build/
+app-android/local.properties
