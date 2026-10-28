@@ -19,7 +19,7 @@
 pub mod record;
 
 use blake2::digest::consts::U32;
-use blake2::{digest::Update, Blake2bMac};
+use blake2::{Blake2bMac, digest::Update};
 use ed25519_dalek::VerifyingKey;
 
 /// Tier encoded by the first three digits of a number.
@@ -274,8 +274,7 @@ mod tests {
         let k = key(11).verifying_key();
         let first = AetherNumber::derive(&k, 0);
         // Nothing accepted => derivation keeps probing and returns None.
-        let none =
-            AetherNumber::derive_with_retry(&k, |_| false);
+        let none = AetherNumber::derive_with_retry(&k, |_| false);
         assert!(none.is_none());
 
         let (n, counter) =

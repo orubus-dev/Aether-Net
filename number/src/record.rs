@@ -83,8 +83,8 @@ impl RegistryRecord {
                 n.tier().name()
             ));
         }
-        let raw = base64_decode(&self.pubkey)
-            .ok_or_else(|| "pubkey is not valid base64".to_owned())?;
+        let raw =
+            base64_decode(&self.pubkey).ok_or_else(|| "pubkey is not valid base64".to_owned())?;
         let bytes: [u8; 32] = raw
             .try_into()
             .map_err(|_| format!("pubkey is {} bytes, want 32", raw.len()))?;
@@ -140,8 +140,16 @@ pub(crate) fn base64_encode(data: &[u8]) -> String {
         let n = (u32::from(b[0]) << 16) | (u32::from(b[1]) << 8) | u32::from(b[2]);
         out.push(T[(n >> 18) as usize & 63] as char);
         out.push(T[(n >> 12) as usize & 63] as char);
-        out.push(if chunk.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
-        out.push(if chunk.len() > 2 { T[n as usize & 63] as char } else { '=' });
+        out.push(if chunk.len() > 1 {
+            T[(n >> 6) as usize & 63] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            T[n as usize & 63] as char
+        } else {
+            '='
+        });
     }
     out
 }
