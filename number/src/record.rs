@@ -92,7 +92,9 @@ impl RegistryRecord {
         let vk = VerifyingKey::from_bytes(&bytes)
             .map_err(|e| format!("pubkey is not a valid Ed25519 key: {e}"))?;
         let derived = crate::AetherNumber::derive(&vk, self.counter);
-        if derived.plain() != self.number {
+        // Tier only re-letters the prefix; the seven free digits are
+        // tier-invariant, so verification re-applies the record's tier.
+        if derived.with_tier(n.tier()).plain() != self.number {
             return Err(format!(
                 "number {} is not derive(pubkey, counter={}) = {}",
                 self.number,

@@ -2,7 +2,7 @@ package net.aethernet.app.net
 
 import android.util.Base64
 import org.json.JSONObject
-import java.io.HttpURLConnection
+import java.net.HttpURLConnection
 import java.net.URL
 
 /**
