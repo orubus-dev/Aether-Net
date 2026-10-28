@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [m[m[m[main]
+    branches: [main]
   pull_request:
-    branches: [m[m[m[main]
+    branches: [main]
 
 permissions:
   contents: write
