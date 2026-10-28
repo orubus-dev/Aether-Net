@@ -22,10 +22,7 @@ use blake2::{
     Blake2b,
     digest::{Digest, consts::U32},
 };
-use blake2::{
-    Blake2b,
-    digest::{Digest, consts::U32},
-};
+
 use ed25519_dalek::VerifyingKey;
 
 /// Tier encoded by the first three digits of a number.
@@ -308,7 +305,4 @@ mod tests {
         assert!(rec.verify().is_err());
     }
 }
-use blake2::{
-    Blake2b,
-    digest::{Digest, consts::U32},
-};
+
