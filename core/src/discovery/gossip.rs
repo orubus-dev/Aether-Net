@@ -379,10 +379,13 @@ fn transport_to_u8(value: PhysicalTransport) -> u8 {
     match value {
         PhysicalTransport::Ethernet => 1,
         PhysicalTransport::Wifi => 2,
-        PhysicalTransport::Bluetooth => 3,
+        PhysicalTransport::WifiDirect => 7,
+        PhysicalTransport::WifiAware => 8,
+        PhysicalTransport::BluetoothLe => 3,
         PhysicalTransport::Uwb => 4,
+        PhysicalTransport::LoRa => 9,
         PhysicalTransport::Cellular => 5,
-        PhysicalTransport::Virtual => 6,
+        PhysicalTransport::Satellite => 10,
     }
 }
 
@@ -390,10 +393,13 @@ fn transport_from_u8(value: u8) -> Result<PhysicalTransport, DiscoveryGossipErro
     match value {
         1 => Ok(PhysicalTransport::Ethernet),
         2 => Ok(PhysicalTransport::Wifi),
-        3 => Ok(PhysicalTransport::Bluetooth),
+        3 => Ok(PhysicalTransport::BluetoothLe),
         4 => Ok(PhysicalTransport::Uwb),
         5 => Ok(PhysicalTransport::Cellular),
-        6 => Ok(PhysicalTransport::Virtual),
+        7 => Ok(PhysicalTransport::WifiDirect),
+        8 => Ok(PhysicalTransport::WifiAware),
+        9 => Ok(PhysicalTransport::LoRa),
+        10 => Ok(PhysicalTransport::Satellite),
         _ => Err(DiscoveryGossipError::InvalidTransport),
     }
 }

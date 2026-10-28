@@ -18,8 +18,14 @@
 
 pub mod record;
 
-use blake2::digest::consts::U32;
-use blake2::{Blake2bMac, digest::Update};
+use blake2::{
+    digest::{consts::U32, Digest},
+    Blake2b,
+};
+use blake2::{
+    digest::{consts::U32, Digest},
+    Blake2b,
+};
 use ed25519_dalek::VerifyingKey;
 
 /// Tier encoded by the first three digits of a number.
@@ -106,9 +112,9 @@ impl AetherNumber {
         input[..32].copy_from_slice(pubkey.as_bytes());
         input[32..].copy_from_slice(&counter.to_le_bytes());
 
-        let mut h = Blake2bMac::<U32>::new(None);
-        Update::update(&mut h, &input);
-        let out = h.finalize_fixed();
+        let mut h = Blake2b::<U32>::new();
+        h.update(&input);
+        let out = h.finalize();
 
         let mut digits = [0u8; 7];
         for (i, d) in digits.iter_mut().enumerate() {

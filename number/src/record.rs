@@ -85,7 +85,7 @@ impl RegistryRecord {
         }
         let raw =
             base64_decode(&self.pubkey).ok_or_else(|| "pubkey is not valid base64".to_owned())?;
-        let bytes: [u8; 32] = raw
+        let bytes: [u8; 32] = raw.as_slice()
             .try_into()
             .map_err(|_| format!("pubkey is {} bytes, want 32", raw.len()))?;
         let vk = VerifyingKey::from_bytes(&bytes)

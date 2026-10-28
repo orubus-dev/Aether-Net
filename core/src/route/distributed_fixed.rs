@@ -16,7 +16,7 @@ pub struct RouteNeighbor {
     pub metrics: RouteMetrics,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RouteAdvertisement {
     pub origin: NodeId,
     pub sequence: u64,
