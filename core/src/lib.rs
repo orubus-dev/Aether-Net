@@ -62,6 +62,7 @@ pub use platform::{
     HostPaths, HostPlatform, RestartPolicy, ServiceLifecycle, ServiceSpec, ServiceStatus,
     ServiceSupervisor,
 };
+pub use runtime::{AetherNodeRuntime, CoreConfig};
 pub use security::{PrivacyContext, PrivacyToken, ReplayWindow, SecurityPolicy, SecurityProfile};
 pub use services::{
     BuildArtifact, DeploymentError, DeploymentPlan, SiteFile, prepare_upload, verify_artifact,
