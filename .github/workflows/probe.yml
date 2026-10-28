@@ -1,0 +1,11 @@
+name: probe
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  echo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hello
+        run: echo "actions work in this repo"
