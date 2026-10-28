@@ -308,3 +308,7 @@ mod tests {
         assert!(rec.verify().is_err());
     }
 }
+use blake2::{
+    digest::{consts::U32, Digest},
+    Blake2b,
+};
