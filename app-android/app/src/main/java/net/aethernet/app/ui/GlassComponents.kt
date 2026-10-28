@@ -125,10 +125,10 @@ fun GlassCard(
 @Composable
 fun GlowButton(
     text: String,
-    onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     height: Dp = 54.dp,
+    onClick: () -> Unit,
 ) {
     Button(
         onClick = onClick,

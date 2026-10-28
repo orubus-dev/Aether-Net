@@ -48,7 +48,7 @@ class LanTransport(
     data class Peer(
         val publicKey: ByteArray,
         val number: String,
-        val name: String,
+        var name: String,
         var address: InetAddress,
         var lastSeen: Long,
     ) {
