@@ -1,0 +1,14 @@
+name: probe2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  echo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hello
+        run: echo "permissions write works"
