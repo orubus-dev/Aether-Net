@@ -94,7 +94,7 @@ impl RegistryRecord {
         let derived = crate::AetherNumber::derive(&vk, self.counter);
         // Tier only re-letters the prefix; the seven free digits are
         // tier-invariant, so verification re-applies the record's tier.
-        if derived.with_tier(n.tier()).plain() != self.number {
+        if derived.clone().with_tier(n.tier()).plain() != self.number {
             return Err(format!(
                 "number {} is not derive(pubkey, counter={}) = {}",
                 self.number,
