@@ -10,3 +10,5 @@ pub use deployment::{
 pub use hosting::{DeploymentSource, HostingError, SITE_ID_LENGTH, SiteId, SiteManifest};
 pub use registry::RuntimeServiceRegistry;
 pub use service::{ServiceDescriptor, ServiceId, ServiceKind};
+
+pub use policy::ServiceTrafficPolicy;
