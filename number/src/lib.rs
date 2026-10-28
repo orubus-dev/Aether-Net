@@ -309,6 +309,6 @@ mod tests {
     }
 }
 use blake2::{
-    digest::{consts::U32, Digest},
     Blake2b,
+    digest::{Digest, consts::U32},
 };
