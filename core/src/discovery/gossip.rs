@@ -456,7 +456,10 @@ mod tests {
             SignedDiscoveryAdvertisement::new(&key, origin, device_id, 1, 10, 50, &[], &[], &[])
                 .unwrap();
         let mut encoded = advertisement.encode().unwrap();
-        encoded[20] ^= 1;
+        // Flip the tail of the signature: header bytes are covered by the
+        // identity prefilter (IdentityMismatch) and the frame structure check.
+        let tail = encoded.len() - 1;
+        encoded[tail] ^= 1;
         let decoded = SignedDiscoveryAdvertisement::decode(&encoded).unwrap();
         assert_eq!(
             decoded.verify(20),
