@@ -9,10 +9,10 @@ exports.jubjub_findGroupHash = jubjub_findGroupHash;
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const blake1_js_1 = require("../hashes/blake1.js");
-const blake2_js_1 = require("../hashes/blake2.js");
-const sha2_js_1 = require("../hashes/sha2.js");
-const utils_js_1 = require("../hashes/utils.js");
+const blake1_js_1 = require("../hashes/esm/blake1.js");
+const blake2_js_1 = require("../hashes/esm/blake2.js");
+const sha2_js_1 = require("../hashes/esm/sha2.js");
+const utils_js_1 = require("../hashes/esm/utils.js");
 const edwards_ts_1 = require("./abstract/edwards.js");
 const modular_ts_1 = require("./abstract/modular.js");
 const weierstrass_ts_1 = require("./abstract/weierstrass.js");

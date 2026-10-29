@@ -81,8 +81,8 @@ exports.HMAC = HMAC;
  * @param key - message key
  * @param message - message data
  * @example
- * import { hmac } from './hmac.js';
- * import { sha256 } from './sha2.js';
+ * import { hmac } from './esm/hmac.js';
+ * import { sha256 } from './esm/sha2.js';
  * const mac1 = hmac(sha256, 'key', 'message');
  */
 const hmac = (hash, key, message) => new HMAC(hash, key).update(message).digest();

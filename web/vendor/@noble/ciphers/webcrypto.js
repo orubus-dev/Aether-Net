@@ -15,7 +15,7 @@ exports.managedNonce = managedNonce;
  * @module
  */
 // Use full path so that Node.js can rewrite it to `cryptoNode.js`.
-const crypto_1 = require("./crypto");
+const crypto_1 = require("./esm/crypto.js");
 const utils_ts_1 = require("./utils.js");
 /**
  * Secure PRNG. Uses `crypto.getRandomValues`, which defers to OS.

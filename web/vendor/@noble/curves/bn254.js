@@ -57,7 +57,7 @@ Ate loop size: 6x+2
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const sha2_js_1 = require("../hashes/sha2.js");
+const sha2_js_1 = require("../hashes/esm/sha2.js");
 const bls_ts_1 = require("./abstract/bls.js");
 const modular_ts_1 = require("./abstract/modular.js");
 const tower_ts_1 = require("./abstract/tower.js");

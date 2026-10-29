@@ -7,7 +7,7 @@ exports.p521_hasher = exports.secp521r1 = exports.secp384r1 = exports.secp256r1 
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const sha2_js_1 = require("../hashes/sha2.js");
+const sha2_js_1 = require("../hashes/esm/sha2.js");
 const _shortw_utils_ts_1 = require("./_shortw_utils.js");
 const hash_to_curve_ts_1 = require("./abstract/hash-to-curve.js");
 const modular_ts_1 = require("./abstract/modular.js");

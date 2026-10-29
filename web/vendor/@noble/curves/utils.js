@@ -30,8 +30,8 @@ exports.memoized = memoized;
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const utils_js_1 = require("../hashes/utils.js");
-var utils_js_2 = require("../hashes/utils.js");
+const utils_js_1 = require("../hashes/esm/utils.js");
+var utils_js_2 = require("../hashes/esm/utils.js");
 Object.defineProperty(exports, "abytes", { enumerable: true, get: function () { return utils_js_2.abytes; } });
 Object.defineProperty(exports, "anumber", { enumerable: true, get: function () { return utils_js_2.anumber; } });
 Object.defineProperty(exports, "bytesToHex", { enumerable: true, get: function () { return utils_js_2.bytesToHex; } });

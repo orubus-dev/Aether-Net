@@ -25,8 +25,8 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { hmac as nobleHmac } from '../../../hashes/hmac.js';
-import { ahash } from '../../../hashes/utils.js';
+import { hmac as nobleHmac } from '../../../hashes/esm/hmac.js';
+import { ahash } from '../../../hashes/esm/utils.js';
 import { _validateObject, _abool2 as abool, _abytes2 as abytes, aInRange, bitLen, bitMask, bytesToHex, bytesToNumberBE, concatBytes, createHmacDrbg, ensureBytes, hexToBytes, inRange, isBytes, memoized, numberToHexUnpadded, randomBytes as randomBytesWeb, } from "../utils.js";
 import { _createCurveFields, mulEndoUnsafe, negateCt, normalizeZ, pippenger, wNAF, } from "./curve.js";
 import { Field, FpInvertBatch, getMinHashLength, mapHashToField, nLength, validateField, } from "./modular.js";

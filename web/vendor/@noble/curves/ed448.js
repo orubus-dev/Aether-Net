@@ -11,8 +11,8 @@ exports.edwardsToMontgomeryPub = edwardsToMontgomeryPub;
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const sha3_js_1 = require("../hashes/sha3.js");
-const utils_js_1 = require("../hashes/utils.js");
+const sha3_js_1 = require("../hashes/esm/sha3.js");
+const utils_js_1 = require("../hashes/esm/utils.js");
 const curve_ts_1 = require("./abstract/curve.js");
 const edwards_ts_1 = require("./abstract/edwards.js");
 const hash_to_curve_ts_1 = require("./abstract/hash-to-curve.js");
@@ -127,7 +127,7 @@ const ED448_DEF = /* @__PURE__ */ (() => ({
 /**
  * ed448 EdDSA curve and methods.
  * @example
- * import { ed448 } from './ed448.js';
+ * import { ed448 } from './esm/ed448.js';
  * const { secretKey, publicKey } = ed448.keygen();
  * const msg = new TextEncoder().encode('hello');
  * const sig = ed448.sign(msg, secretKey);
@@ -320,7 +320,7 @@ class _DecafPoint extends edwards_ts_1.PrimeEdwardsPoint {
     init(ep) {
         return new _DecafPoint(ep);
     }
-    /** @deprecated use `import { decaf448_hasher } from './ed448.js';` */
+    /** @deprecated use `import { decaf448_hasher } from './esm/ed448.js';` */
     static hashToCurve(hex) {
         return decaf448_map((0, utils_ts_1.ensureBytes)('decafHash', hex, 112));
     }
@@ -357,7 +357,7 @@ class _DecafPoint extends edwards_ts_1.PrimeEdwardsPoint {
     static fromHex(hex) {
         return _DecafPoint.fromBytes((0, utils_ts_1.ensureBytes)('decafHex', hex, 56));
     }
-    /** @deprecated use `import { pippenger } from './abstract/curve.js';` */
+    /** @deprecated use `import { pippenger } from './esm/abstract/curve.js';` */
     static msm(points, scalars) {
         return (0, curve_ts_1.pippenger)(_DecafPoint, Fn, points, scalars);
     }
@@ -446,13 +446,13 @@ exports.ED448_TORSION_SUBGROUP = [
 ];
 /** @deprecated use `decaf448.Point` */
 exports.DecafPoint = _DecafPoint;
-/** @deprecated use `import { ed448_hasher } from './ed448.js';` */
+/** @deprecated use `import { ed448_hasher } from './esm/ed448.js';` */
 exports.hashToCurve = (() => exports.ed448_hasher.hashToCurve)();
-/** @deprecated use `import { ed448_hasher } from './ed448.js';` */
+/** @deprecated use `import { ed448_hasher } from './esm/ed448.js';` */
 exports.encodeToCurve = (() => exports.ed448_hasher.encodeToCurve)();
-/** @deprecated use `import { decaf448_hasher } from './ed448.js';` */
+/** @deprecated use `import { decaf448_hasher } from './esm/ed448.js';` */
 exports.hashToDecaf448 = (() => exports.decaf448_hasher.hashToCurve)();
-/** @deprecated use `import { decaf448_hasher } from './ed448.js';` */
+/** @deprecated use `import { decaf448_hasher } from './esm/ed448.js';` */
 exports.hash_to_decaf448 = (() => exports.decaf448_hasher.hashToCurve)();
 /** @deprecated use `ed448.utils.toMontgomery` */
 function edwardsToMontgomeryPub(edwardsPub) {

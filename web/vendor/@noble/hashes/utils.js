@@ -39,7 +39,7 @@ exports.randomBytes = randomBytes;
 // from `crypto` to `cryptoNode`, which imports native module.
 // Makes the utils un-importable in browsers without a bundler.
 // Once node.js 18 is deprecated (2025-04-30), we can just drop the import.
-const crypto_1 = require("./crypto");
+const crypto_1 = require("./esm/crypto.js");
 /** Checks if something is Uint8Array. Be careful: nodejs Buffer will return true. */
 function isBytes(a) {
     return a instanceof Uint8Array || (ArrayBuffer.isView(a) && a.constructor.name === 'Uint8Array');

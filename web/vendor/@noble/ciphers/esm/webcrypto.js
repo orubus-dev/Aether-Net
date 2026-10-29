@@ -9,7 +9,7 @@
  * @module
  */
 // Use full path so that Node.js can rewrite it to `cryptoNode.js`.
-import { crypto } from '../../hashes/esm/crypto.js';
+import { crypto } from './crypto.js';
 import { abytes, anumber, concatBytes } from "./utils.js";
 /**
  * Secure PRNG. Uses `crypto.getRandomValues`, which defers to OS.

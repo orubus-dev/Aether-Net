@@ -4,10 +4,10 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { blake256 } from '../../hashes/blake1.js';
-import { blake2s } from '../../hashes/blake2.js';
-import { sha256, sha512 } from '../../hashes/sha2.js';
-import { concatBytes, utf8ToBytes } from '../../hashes/utils.js';
+import { blake256 } from '../../hashes/esm/blake1.js';
+import { blake2s } from '../../hashes/esm/blake2.js';
+import { sha256, sha512 } from '../../hashes/esm/sha2.js';
+import { concatBytes, utf8ToBytes } from '../../hashes/esm/utils.js';
 import { twistedEdwards, } from "./abstract/edwards.js";
 import { Field, mod } from "./abstract/modular.js";
 import { weierstrass } from "./abstract/weierstrass.js";

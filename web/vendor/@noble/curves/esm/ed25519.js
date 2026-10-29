@@ -6,8 +6,8 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha512 } from '../../hashes/sha2.js';
-import { abytes, concatBytes, utf8ToBytes } from '../../hashes/utils.js';
+import { sha512 } from '../../hashes/esm/sha2.js';
+import { abytes, concatBytes, utf8ToBytes } from '../../hashes/esm/utils.js';
 import { pippenger } from "./abstract/curve.js";
 import { PrimeEdwardsPoint, twistedEdwards, } from "./abstract/edwards.js";
 import { _DST_scalar, createHasher, expand_message_xmd, } from "./abstract/hash-to-curve.js";
@@ -101,7 +101,7 @@ const ed25519Defaults = /* @__PURE__ */ (() => ({
 /**
  * ed25519 curve with EdDSA signatures.
  * @example
- * import { ed25519 } from '../ed25519.js';
+ * import { ed25519 } from './ed25519.js';
  * const { secretKey, publicKey } = ed25519.keygen();
  * const msg = new TextEncoder().encode('hello');
  * const sig = ed25519.sign(msg, priv);
@@ -127,7 +127,7 @@ export const ed25519ph = /* @__PURE__ */ (() => twistedEdwards(Object.assign({},
 /**
  * ECDH using curve25519 aka x25519.
  * @example
- * import { x25519 } from '../ed25519.js';
+ * import { x25519 } from './ed25519.js';
  * const priv = 'a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4';
  * const pub = 'e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c';
  * x25519.getSharedSecret(priv, pub) === x25519.scalarMult(priv, pub); // aliases
@@ -299,7 +299,7 @@ class _RistrettoPoint extends PrimeEdwardsPoint {
     init(ep) {
         return new _RistrettoPoint(ep);
     }
-    /** @deprecated use `import { ristretto255_hasher } from '../ed25519.js';` */
+    /** @deprecated use `import { ristretto255_hasher } from './ed25519.js';` */
     static hashToCurve(hex) {
         return ristretto255_map(ensureBytes('ristrettoHash', hex, 64));
     }
@@ -456,12 +456,12 @@ export function edwardsToMontgomeryPriv(edwardsPriv) {
 }
 /** @deprecated use `ristretto255.Point` */
 export const RistrettoPoint = _RistrettoPoint;
-/** @deprecated use `import { ed25519_hasher } from '../ed25519.js';` */
+/** @deprecated use `import { ed25519_hasher } from './ed25519.js';` */
 export const hashToCurve = /* @__PURE__ */ (() => ed25519_hasher.hashToCurve)();
-/** @deprecated use `import { ed25519_hasher } from '../ed25519.js';` */
+/** @deprecated use `import { ed25519_hasher } from './ed25519.js';` */
 export const encodeToCurve = /* @__PURE__ */ (() => ed25519_hasher.encodeToCurve)();
-/** @deprecated use `import { ristretto255_hasher } from '../ed25519.js';` */
+/** @deprecated use `import { ristretto255_hasher } from './ed25519.js';` */
 export const hashToRistretto255 = /* @__PURE__ */ (() => ristretto255_hasher.hashToCurve)();
-/** @deprecated use `import { ristretto255_hasher } from '../ed25519.js';` */
+/** @deprecated use `import { ristretto255_hasher } from './ed25519.js';` */
 export const hash_to_ristretto255 = /* @__PURE__ */ (() => ristretto255_hasher.hashToCurve)();
 //# sourceMappingURL=ed25519.js.map

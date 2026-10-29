@@ -38,8 +38,8 @@ exports.weierstrass = weierstrass;
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-const hmac_js_1 = require("../../hashes/hmac.js");
-const utils_1 = require("../../hashes/utils");
+const hmac_js_1 = require("../../hashes/esm/hmac.js");
+const utils_1 = require("../../hashes/esm/utils.js");
 const utils_ts_1 = require("../utils.js");
 const curve_ts_1 = require("./curve.js");
 const modular_ts_1 = require("./modular.js");

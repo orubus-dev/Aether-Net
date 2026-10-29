@@ -70,9 +70,9 @@ export function expand(hash, prk, info, length = 32) {
  * @param info - optional context and application specific information (can be a zero-length string)
  * @param length - length of output keying material in bytes
  * @example
- * import { hkdf } from '../hkdf.js';
- * import { sha256 } from '../sha2.js';
- * import { randomBytes } from '../utils.js';
+ * import { hkdf } from './hkdf.js';
+ * import { sha256 } from './sha2.js';
+ * import { randomBytes } from './utils.js';
  * const inputKey = randomBytes(32);
  * const salt = randomBytes(32);
  * const info = 'application-key';
