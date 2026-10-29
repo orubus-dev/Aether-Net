@@ -1,5 +1,6 @@
 pub mod bandwidth;
 pub mod l4_engine;
+pub mod media;
 pub mod native;
 pub mod udp;
 pub mod usage;
@@ -11,6 +12,13 @@ pub use l4_engine::{
     DEFAULT_MAX_CONGESTION_WINDOW, DEFAULT_MAX_IN_FLIGHT, DEFAULT_MAX_RECV_BUFFER,
     DEFAULT_MAX_RETRANSMIT_TIMEOUT_MS, DEFAULT_MIN_RETRANSMIT_TIMEOUT_MS,
     DEFAULT_RETRANSMIT_TIMEOUT_MS, L4ReceiveError, L4SendError, L4SessionState,
+};
+
+pub use media::{
+    encode_frame, decode_datagram, CallSignal, JitterBuffer, JitterPush, MediaCodec,
+    MediaError, MediaFrame, MediaFrameHeader, MediaMux, MediaSession, MediaStats,
+    CALL_ID_LENGTH, DEFAULT_JITTER_BUFFER_FRAMES, MAX_MEDIA_PAYLOAD, MEDIA_HEADER_LEN,
+    MEDIA_MAGIC, MEDIA_VERSION,
 };
 
 pub use native::{
