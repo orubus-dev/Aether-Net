@@ -71,6 +71,8 @@ impl RegistryRecord {
             counter,
             handle,
             domain,
+            display_name: None,
+            email_pointer: None,
             created_at: now_rfc3339(),
             schema: 1,
         }

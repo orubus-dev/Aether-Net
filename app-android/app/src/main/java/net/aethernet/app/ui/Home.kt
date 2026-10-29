@@ -278,7 +278,7 @@ private fun DialerTab(identity: Identity) {
                 Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("INCOMING CALL", color = Glass.InkDim, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp)
                     Spacer(Modifier.height(8.dp))
-                    NumberDisplay(c.from, fontSize = 28.sp)
+                    Text(c.from.chunked(3).joinToString(" "), fontSize = 28.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, color = Glass.Accent)
                     Spacer(Modifier.height(14.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         GlowButton("Accept", height = 48.dp) {
