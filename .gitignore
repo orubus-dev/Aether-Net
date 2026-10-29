@@ -10,11 +10,9 @@ vendor/
 # Vendored crypto for the assist API and the web client — these MUST ship
 # with the repo, or claim/resolve and the client 500 on every fresh deploy.
 !api/_vendor/
-!api/_vendor/node_modules/
-!api/_vendor/node_modules/**
+!api/_vendor/**
 !web/vendor/
-!web/vendor/node_modules/
-!web/vendor/node_modules/**
+!web/vendor/**
 
 # Environment
 .env

@@ -11,10 +11,10 @@
  * The Rust core maps this 1:1 onto native L4 media sessions.
  */
 
-import { ed25519, x25519 } from "/vendor/node_modules/@noble/curves/esm/ed25519.js";
-import { sha512 } from "/vendor/node_modules/@noble/hashes/esm/sha512.js";
-import { blake2b } from "/vendor/node_modules/@noble/hashes/esm/blake2b.js";
-import { xchacha20poly1305 } from "/vendor/node_modules/@noble/ciphers/esm/chacha.js";
+import { ed25519, x25519 } from "/vendor/@noble/curves/esm/ed25519.js";
+import { sha512 } from "/vendor/@noble/hashes/esm/sha512.js";
+import { blake2b } from "/vendor/@noble/hashes/esm/blake2b.js";
+import { xchacha20poly1305 } from "/vendor/@noble/ciphers/esm/chacha.js";
 
 /* ------------------------------ tiny helpers ----------------------------- */
 
