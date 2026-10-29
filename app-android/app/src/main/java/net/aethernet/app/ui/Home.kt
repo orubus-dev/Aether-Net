@@ -14,13 +14,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
@@ -53,21 +54,33 @@ import net.aethernet.app.AetherNumber
 import net.aethernet.app.Identity
 import net.aethernet.app.NetGraph
 import net.aethernet.app.data.MessageStore
+import net.aethernet.app.net.AssistClient
+import net.aethernet.app.net.AssistPoller
 import net.aethernet.app.net.RegistryClient
 import net.aethernet.app.relay.RelayService
 
 /** Release name, kept in sync with app-android/VERSION. */
 object AppVersion {
-    const val NAME = "0.1.0"
+    const val NAME = "0.2.0"
 }
 
 /** Which bottom tab is open. */
-enum class Tab { CHATS, NUMBERS, SITES, SETTINGS }
+enum class Tab { PHONE, CHATS, SITES, SETTINGS }
 
 /** Simple app-shell state shared with MainActivity. */
 object Shell {
-    val tab = MutableStateFlow(Tab.CHATS)
+    val tab = MutableStateFlow(Tab.PHONE)
     val openChat = MutableStateFlow<String?>(null) // number of open chat
+}
+
+/**
+ * Live assist-layer events shared between the poller and the UI: incoming
+ * calls ring here, incoming assist mail lands in the message store.
+ */
+object AssistBus {
+    sealed class CallEvent { data class Ring(val from: String) : CallEvent(); object Idle : CallEvent() }
+    val call = MutableStateFlow<CallEvent>(CallEvent.Idle)
+    val tick = MutableStateFlow(0)
 }
 
 @Composable
@@ -82,6 +95,18 @@ fun Home(identity: Identity, handle: String?) {
         NetGraph.transport?.running?.collect { relayOn.value = it }
     }
 
+    // Assist poller: rides the internet-assisted path when the mesh is out
+    // of reach. Encrypted envelopes only — the endpoint cannot read them.
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(8_000)
+            val r = withContext(Dispatchers.IO) {
+                runCatching { AssistPoller.poll(identity) }.getOrNull()
+            }
+            if (r == true) AssistBus.tick.value++
+        }
+    }
+
     LiquidBackground(Modifier.fillMaxSize())
 
     when (val chat = openChat) {
@@ -93,9 +118,9 @@ fun Home(identity: Identity, handle: String?) {
         ) {
             Box(Modifier.weight(1f)) {
                 when (tab) {
+                    Tab.PHONE -> DialerTab(identity)
                     Tab.CHATS -> ChatsTab(identity)
-                    Tab.NUMBERS -> NumbersTab(identity, handle)
-                    Tab.SITES -> SitesTab()
+                    Tab.SITES -> SitesTab(identity)
                     Tab.SETTINGS -> SettingsTab(identity, handle)
                 }
             }
@@ -111,8 +136,8 @@ fun Home(identity: Identity, handle: String?) {
 @Composable
 private fun GlassBar(current: Tab, onTab: (Tab) -> Unit) {
     val items = listOf(
+        (Tab.PHONE to Icons.Default.Call) to "Phone",
         (Tab.CHATS to Icons.Default.Send) to "Chats",
-        (Tab.NUMBERS to Icons.Default.Add) to "Numbers",
         (Tab.SITES to Icons.Default.Home) to "Sites",
         (Tab.SETTINGS to Icons.Default.Settings) to "Settings",
     )
@@ -153,6 +178,130 @@ private fun GlassBar(current: Tab, onTab: (Tab) -> Unit) {
                 }
             }
         }
+    }
+}
+
+/* ------------------------------- PHONE TAB ------------------------------- */
+
+/** Shared dial state so the pad and the call card agree. */
+object Dialer {
+    val dialed = MutableStateFlow("")
+    val status = MutableStateFlow("")
+}
+
+@Composable
+private fun DialerTab(identity: Identity) {
+    val scope = rememberCoroutineScope()
+    val dialed by Dialer.dialed.collectAsState()
+    val status by Dialer.status.collectAsState()
+    val call by AssistBus.call.collectAsState()
+    val context = LocalContext.current
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+        Spacer(Modifier.height(18.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Phone", style = GlassTypography.headlineMedium)
+                Text("Calls ride the mesh; the assist path rings when the mesh can’t.", style = GlassTypography.bodySmall)
+            }
+            StatusDot(
+                on = NetGraph.transport?.running?.value == true,
+                label = if (NetGraph.transport?.running?.value == true) "mesh live" else "assist path",
+            )
+        }
+        Spacer(Modifier.height(26.dp))
+
+        Text(
+            if (dialed.isEmpty()) " " else dialed.chunked(3).joinToString(" "),
+            fontSize = 34.sp,
+            fontWeight = FontWeight.Bold,
+            color = Glass.Ink,
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        Spacer(Modifier.height(18.dp))
+
+        val rows = listOf(
+            listOf("1", "2", "3"),
+            listOf("4", "5", "6"),
+            listOf("7", "8", "9"),
+            listOf("⌫", "0", "☎"),
+        )
+        rows.forEach { row ->
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                row.forEach { key ->
+                    Box(
+                        Modifier
+                            .size(72.dp)
+                            .clip(RoundedCornerShape(36.dp))
+                            .background(if (key == "☎") Glass.AccentGlow.copy(alpha = 0.9f) else Glass.GlassFill)
+                            .clickable {
+                                when (key) {
+                                    "⌫" -> Dialer.dialed.value = dialed.dropLast(1)
+                                    "☎" -> {
+                                        val n = dialed
+                                        if (n.length == 10) {
+                                            Dialer.status.value = "resolving…"
+                                            scope.launch {
+                                                Dialer.status.value = withContext(Dispatchers.IO) {
+                                                    AssistPoller.ring(identity, n)
+                                                }
+                                            }
+                                        } else {
+                                            Dialer.status.value = "enter a full ten-digit number"
+                                        }
+                                    }
+                                    else -> if (dialed.length < 10) Dialer.dialed.value = dialed + key
+                                }
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(key, fontSize = 24.sp, color = if (key == "☎") Glass.FieldBottom else Glass.Ink, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
+
+        Text(status, fontSize = 14.sp, color = Glass.AccentGlow, modifier = Modifier.padding(top = 6.dp))
+
+        when (val c = call) {
+            is AssistBus.CallEvent.Ring -> GlassCard(Modifier.fillMaxWidth().padding(top = 14.dp)) {
+                Column(Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("INCOMING CALL", color = Glass.InkDim, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 2.sp)
+                    Spacer(Modifier.height(8.dp))
+                    NumberDisplay(c.from, fontSize = 28.sp)
+                    Spacer(Modifier.height(14.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        GlowButton("Accept", height = 48.dp) {
+                            AssistBus.call.value = AssistBus.CallEvent.Idle
+                            scope.launch {
+                                Dialer.status.value = withContext(Dispatchers.IO) {
+                                    AssistPoller.answer(identity, c.from, accept = true)
+                                }
+                            }
+                        }
+                        GlowButton("Decline", height = 48.dp) {
+                            val from = c.from
+                            AssistBus.call.value = AssistBus.CallEvent.Idle
+                            scope.launch {
+                                withContext(Dispatchers.IO) { AssistPoller.answer(identity, from, accept = false) }
+                            }
+                        }
+                    }
+                }
+            }
+            AssistBus.CallEvent.Idle -> {}
+        }
+        Spacer(Modifier.height(14.dp))
     }
 }
 
@@ -345,7 +494,41 @@ private fun NumbersTab(identity: Identity, handle: String?) {
 /* ------------------------------- SITES TAB ------------------------------- */
 
 @Composable
-private fun SitesTab() {
+private fun SitesTab(identity: Identity) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var url by remember { mutableStateOf("") }
+    var browsing by remember { mutableStateOf(false) }
+    var html by remember { mutableStateOf<String?>(null) }
+    var status by remember { mutableStateOf("") }
+
+    fun open(target: String) {
+        status = "resolving…"
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val client = AssistClient(NetGraph.assistEndpoint)
+                    val r = client.sitesGet(target, "/")
+                    when (r) {
+                        is AssistClient.Result.Ok -> {
+                            val b64 = r.json.optString("content")
+                            val bytes = android.util.Base64.decode(b64, android.util.Base64.NO_WRAP)
+                            String(bytes, Charsets.UTF_8)
+                        }
+                        is AssistClient.Result.Err -> null
+                    }
+                }.getOrNull()
+            }
+            if (result != null) {
+                html = result
+                browsing = true
+                status = ""
+            } else {
+                status = "cannot open $target — is the site published on the registry?"
+            }
+        }
+    }
+
     Column(
         Modifier
             .fillMaxSize()
@@ -358,29 +541,61 @@ private fun SitesTab() {
         Spacer(Modifier.height(16.dp))
 
         GlassCard(Modifier.fillMaxWidth()) {
+            Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    placeholder = { Text("genesis.me.ae", color = Glass.InkFaint) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Glass.Ink,
+                        unfocusedTextColor = Glass.Ink,
+                        focusedBorderColor = Glass.AccentGlow,
+                        unfocusedBorderColor = Glass.GlassBorder,
+                        cursorColor = Glass.AccentGlow,
+                    ),
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                GlowButton("Open", height = 48.dp, enabled = url.isNotBlank()) {
+                    open(url.trim().lowercase())
+                }
+            }
+        }
+        Text(status, fontSize = 13.sp, color = Glass.AccentGlow, modifier = Modifier.padding(horizontal = 4.dp))
+
+        if (browsing && html != null) {
+            GlassCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(10.dp)) {
+                    Text(url, style = GlassTypography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                    androidx.compose.ui.viewinterop.AndroidView(
+                        factory = { ctx ->
+                            android.webkit.WebView(ctx).apply {
+                                settings.javaScriptEnabled = false
+                                settings.loadWithOverviewMode = true
+                            }
+                        },
+                        update = { wv -> wv.loadDataWithBaseURL(null, html ?: "", "text/html", "utf-8", null) },
+                        modifier = Modifier.fillMaxWidth().height(420.dp),
+                    )
+                }
+            }
+        }
+
+        GlassCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(22.dp)) {
-                Text("me.ae — your site on AetherNet", style = GlassTypography.titleMedium)
+                Text("Your site on the network", style = GlassTypography.titleMedium)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Import from GitHub or local files, deploy from this app, and your site is served as content-addressed packets cached by relays — reachable at yourname.me.ae from any AetherNet node.",
+                    "Import files, deploy, and your site is served as content-addressed packages cached by relays — reachable at yourname${if (identity.tier == net.aethernet.app.Tier.STANDARD) ".me.ae" else ".ae"} from any AetherNet node or any browser through the assist endpoint.",
                     style = GlassTypography.bodySmall,
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Landing with Phase 10/11 runtime integration: hosting upload model is already implemented in the core; this screen becomes its live front-end.",
+                    "Deploying from the phone lands with the native site importer (M2). The web client at the assist endpoint can publish today.",
                     style = GlassTypography.bodySmall,
                     color = Glass.InkFaint,
-                )
-            }
-        }
-        Spacer(Modifier.height(12.dp))
-        GlassCard(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(22.dp)) {
-                Text("Game hosting", style = GlassTypography.titleMedium)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Elite and prestige nodes can host small-game relays: state packets ride the same encrypted L4 lanes, so friends on the mesh join by number — no servers, no accounts.",
-                    style = GlassTypography.bodySmall,
                 )
             }
         }
@@ -403,6 +618,10 @@ private fun SettingsTab(identity: Identity, handle: String?) {
     var handleInput by remember { mutableStateOf(handle ?: "") }
     var claimStatus by remember { mutableStateOf("not claimed yet") }
     var busy by remember { mutableStateOf(false) }
+    var nameInput by remember { mutableStateOf(NetGraph.displayName ?: "") }
+    var emailInput by remember { mutableStateOf(NetGraph.emailPointer ?: "") }
+    var assistUrl by remember { mutableStateOf(NetGraph.assistEndpoint) }
+    var assistStatus by remember { mutableStateOf("") }
 
     Column(
         Modifier
@@ -417,10 +636,99 @@ private fun SettingsTab(identity: Identity, handle: String?) {
 
         GlassCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp)) {
+                Text("Your identity", style = GlassTypography.titleMedium)
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = nameInput,
+                    onValueChange = { nameInput = it },
+                    placeholder = { Text("display name", color = Glass.InkFaint) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Glass.Ink,
+                        unfocusedTextColor = Glass.Ink,
+                        focusedBorderColor = Glass.AccentGlow,
+                        unfocusedBorderColor = Glass.GlassBorder,
+                        cursorColor = Glass.AccentGlow,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = emailInput,
+                    onValueChange = { emailInput = it },
+                    placeholder = { Text("email pointer (reachable off-net)", color = Glass.InkFaint) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Glass.Ink,
+                        unfocusedTextColor = Glass.Ink,
+                        focusedBorderColor = Glass.AccentGlow,
+                        unfocusedBorderColor = Glass.GlassBorder,
+                        cursorColor = Glass.AccentGlow,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                GlowButton("Save profile", modifier = Modifier.fillMaxWidth()) {
+                    NetGraph.setProfile(nameInput.trim(), emailInput.trim())
+                    assistStatus = "profile saved — included in your next claim"
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "fingerprint ${identity.fingerprint.chunked(4).joinToString(" ")}",
+                    style = GlassTypography.bodySmall,
+                    color = Glass.InkFaint,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        GlassCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp)) {
+                Text("Assist endpoint", style = GlassTypography.titleMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Stateless ciphertext pipe over GitHub storage — no backend holds keys. Runs at aether-net.vercel.app, or on your own box: node api/sandbox-server.js",
+                    style = GlassTypography.bodySmall,
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = assistUrl,
+                    onValueChange = { assistUrl = it },
+                    placeholder = { Text("https://aether-net.vercel.app", color = Glass.InkFaint) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Glass.Ink,
+                        unfocusedTextColor = Glass.Ink,
+                        focusedBorderColor = Glass.AccentGlow,
+                        unfocusedBorderColor = Glass.GlassBorder,
+                        cursorColor = Glass.AccentGlow,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                GlowButton("Save & test", modifier = Modifier.fillMaxWidth()) {
+                    NetGraph.setAssistEndpoint(assistUrl, context)
+                    assistStatus = "testing…"
+                    scope.launch {
+                        assistStatus = withContext(Dispatchers.IO) {
+                            when (val r = AssistClient(NetGraph.assistEndpoint).health()) {
+                                is AssistClient.Result.Ok ->
+                                    "healthy — writes ${if (r.json.optJSONObject("capabilities")?.optBoolean("writes") == true) "enabled" else "read-only (endpoint token missing)"}"
+                                is AssistClient.Result.Err -> "unreachable: ${r.message}"
+                            }
+                        }
+                    }
+                }
+                Text(assistStatus, fontSize = 13.sp, color = Glass.AccentGlow, modifier = Modifier.padding(top = 8.dp))
+            }
+        }
+
+        GlassCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp)) {
                 Text("Number registry claim", style = GlassTypography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "Make your number globally unique on the GitHub registry (orubus-dev/Aether-Net). Create a fine-grained token with contents:write on that repo and paste it here. On collision the app bumps its counter and re-derives — you never manage that by hand.",
+                    "Make your number globally unique on the GitHub registry (orubus-dev/Aether-Net). Two ways: claim through the assist endpoint with no token, or paste a fine-grained token with contents:write and claim directly. On collision the app bumps its counter and re-derives — you never manage that by hand.",
                     style = GlassTypography.bodySmall,
                 )
                 Spacer(Modifier.height(12.dp))
@@ -459,7 +767,34 @@ private fun SettingsTab(identity: Identity, handle: String?) {
                 )
                 Spacer(Modifier.height(10.dp))
                 GlowButton(
-                    if (busy) "Claiming…" else "Claim on registry",
+                    if (busy) "Claiming…" else "Claim via assist (no token)",
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    busy = true
+                    claimStatus = "claiming…"
+                    scope.launch {
+                        claimStatus = withContext(Dispatchers.IO) {
+                            val pubB64 = android.util.Base64.encodeToString(
+                                identity.publicKey, android.util.Base64.NO_WRAP
+                            )
+                            AssistClient(NetGraph.assistEndpoint).claimFlow(
+                                identityPubKeyB64 = pubB64,
+                                tierName = identity.tier.name,
+                                deriveNumber = { c -> AetherNumber.derive(identity.publicKey, c, identity.tier) },
+                                startCounter = identity.counter,
+                                handle = handleInput.trim().lowercase().ifEmpty { null },
+                                displayName = NetGraph.displayName,
+                                emailPointer = NetGraph.emailPointer,
+                                onRederive = { NetGraph.rederiveWithCounter(it) },
+                            )
+                        }
+                        busy = false
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                GlowButton(
+                    if (busy) "Claiming…" else "Claim with GitHub token",
                     enabled = !busy && token.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
                 ) {

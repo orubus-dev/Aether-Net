@@ -77,6 +77,33 @@ signs with the release keystore, and publishes the APK to Releases:
 gradle -p app-android assembleRelease
 ```
 
+
+## The assist layer — serverless, no backend (v0.2)
+
+AetherNet now has an internet-assisted plane that follows the same rule as
+the mesh itself: **your device holds the keys; infrastructure holds only
+ciphertext.**
+
+- **GitHub is the "VPS of sorts"** — the registry (numbers, handles, .ae
+  sites) is storage of truth, and `mail/` holds temporary *encrypted*
+  envelopes between devices that cannot reach each other over the mesh.
+- **The assist endpoint is stateless** — validate, route, forward. No
+  database, no keys, no plaintext. Public default:
+  `https://aether-net.vercel.app` (deploy `api/` in one click), or run the
+  identical API on your own box: `node api/sandbox-server.js` — your sandbox
+  becomes the VPS.
+- **Envelope v1** uses libsodium's own `crypto_box_beforenm` + XChaCha20-
+  Poly1305 with identity-bound AAD; the web client and Android app decrypt
+  each other's mail (proof: `tests/web_crypto_e2e.mjs` — a JS-sealed
+  envelope opened by raw libsodium).
+- **The app** (Android + web at the same domain) ships: identity onboarding
+  (name, username, number, email pointer), a phone dialer whose calls ring
+  over the mesh or the assist path, end-to-end encrypted chats with a
+  mesh/assist path switch, and a browser for sites hosted at `name.me.ae` /
+  `name.ae` — published from the web client in one atomic commit.
+
+See `docs/assist/ASSIST-LAYER.md` for the full contract.
+
 ## Production boundary
 
 The network protocol core is intentionally separated from OS-specific mechanisms.

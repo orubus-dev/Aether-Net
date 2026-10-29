@@ -14,6 +14,13 @@ object NetGraph {
     @Volatile var identity: Identity? = null
     @Volatile var handle: String? = null
 
+    /** Human profile fields surfaced in the registry record. */
+    @Volatile var displayName: String? = null
+    @Volatile var emailPointer: String? = null
+
+    /** Assist endpoint ("GitHub as the VPS" pipe). Override in Settings. */
+    @Volatile var assistEndpoint: String = "https://aether-net.vercel.app"
+
     lateinit var identityStore: IdentityStore
         private set
     lateinit var messages: MessageStore
@@ -28,7 +35,27 @@ object NetGraph {
             val loaded = identityStore.load()
             identity = loaded?.first
             handle = loaded?.second
+            val profile = identityStore.loadProfile()
+            displayName = profile.first
+            emailPointer = profile.second
+            assistEndpoint = context.getSharedPreferences("aethernet", Context.MODE_PRIVATE)
+                .getString("assist_endpoint", "https://aether-net.vercel.app")
+                ?: "https://aether-net.vercel.app"
         }
+    }
+
+    /** Update the profile and persist it with the identity. */
+    fun setProfile(name: String?, email: String?) {
+        displayName = name?.ifBlank { null }
+        emailPointer = email?.ifBlank { null }
+        identityStore.saveProfile(displayName, emailPointer)
+    }
+
+    /** Point the assist layer at a different endpoint (your sandbox VPS). */
+    fun setAssistEndpoint(url: String, context: Context) {
+        assistEndpoint = url.trim().removeSuffix("/")
+        context.getSharedPreferences("aethernet", Context.MODE_PRIVATE)
+            .edit().putString("assist_endpoint", assistEndpoint).apply()
     }
 
     /** Create a brand-new identity and persist it immediately. */

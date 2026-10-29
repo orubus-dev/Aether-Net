@@ -35,6 +35,15 @@ pub struct RegistryRecord {
     /// Optional AetherNet domain bound to this number (`"genesis.me.ae"`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub domain: Option<String>,
+    /// Optional display name shown to other AetherNet users.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+    /// Optional off-network reachability pointer (an email address the
+    /// identity owner monitors). Never used for AetherNet routing — the
+    /// mesh itself has no email — but lets people find each other across
+    /// the old internet while the mesh grows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email_pointer: Option<String>,
     /// RFC 3339 creation timestamp of the claim.
     pub created_at: String,
     /// Registry schema version, currently `1`.

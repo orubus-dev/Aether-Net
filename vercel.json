@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/**/*.js": {
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    { "source": "/vendor/(.*)", "destination": "/web/vendor/$1" },
+    { "source": "/((?!api/).*)", "destination": "/web/$1" }
+  ]
+}

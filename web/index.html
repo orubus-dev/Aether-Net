@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AetherNet — the privacy carrier</title>
+<meta name="theme-color" content="#070B14">
+<link rel="stylesheet" href="/glass.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%230B1222'/%3E%3Ccircle cx='32' cy='32' r='16' fill='none' stroke='%234FC3F7' stroke-width='4'/%3E%3Ccircle cx='32' cy='32' r='5' fill='%23B3E5FC'/%3E%3C/svg%3E">
+</head>
+<body>
+<div id="bg">
+  <div class="blob rose"></div>
+  <div class="blob violet"></div>
+  <div class="blob teal"></div>
+  <div class="blob amber"></div>
+  <div class="grain"></div>
+</div>
+
+<!-- ==================== ONBOARDING ==================== -->
+<section id="onboarding" class="hidden">
+  <div class="shell narrow">
+    <header class="brand">
+      <div class="orb"></div>
+      <h1>AetherNet</h1>
+      <p class="tag">The privacy carrier. No towers, no data centers — your device is a node, the network is the people around you.</p>
+    </header>
+
+    <div class="glass card step" id="step1">
+      <h2>Set up your identity</h2>
+      <p class="muted">Your keys are generated on this device and never leave it. Everything — your number, your .ae name, your address — is derived from them.</p>
+      <label>Display name<input id="in-name" maxlength="40" placeholder="Genesis"></label>
+      <label>Username<input id="in-handle" maxlength="32" placeholder="genesis" autocapitalize="off"></label>
+      <label>Email pointer <span class="hint">(reachable off-net; stored in your registry record)</span>
+        <input id="in-email" type="email" maxlength="254" placeholder="you@example.com"></label>
+      <div class="row gap wrap" id="tier-row">
+        <button class="chip selected" data-tier="500">500 · standard</button>
+        <button class="chip" data-tier="700">700 · elite</button>
+        <button class="chip" data-tier="900">900 · prestige</button>
+      </div>
+      <button class="btn primary block" id="btn-create">Generate identity</button>
+    </div>
+
+    <div class="glass card step hidden" id="step2">
+      <p class="overline">THIS IS YOUR NUMBER</p>
+      <div class="number" id="new-number">—</div>
+      <p class="muted small" id="new-domain"></p>
+      <p class="muted small">Derived from your device key — it was never picked from a pool, so nobody else can hold it. Claiming publishes it to the global registry so every device can find you.</p>
+      <button class="btn primary block" id="btn-claim">Claim on the registry</button>
+      <button class="btn ghost block" id="btn-later">Use offline for now</button>
+      <p class="status" id="claim-status"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== APP ==================== -->
+<section id="app" class="hidden">
+  <div class="shell">
+    <header class="topbar glass">
+      <div class="idbox">
+        <div class="orb small"></div>
+        <div>
+          <div class="name" id="me-name">—</div>
+          <div class="num muted" id="me-number">—</div>
+        </div>
+      </div>
+      <div class="dotrow">
+        <span class="dot" id="dot-assist" title="assist endpoint"></span><span class="dotlabel" id="dot-assist-label">assist</span>
+        <span class="dot" id="dot-registry" title="registry"></span><span class="dotlabel">registry</span>
+      </div>
+    </header>
+
+    <main id="views">
+      <!-- DIALER -->
+      <div class="view" id="view-dialer">
+        <div class="glass card">
+          <div class="dialnum" id="dial-num">&nbsp;</div>
+          <div class="pad">
+            <button data-d="1">1</button><button data-d="2">2</button><button data-d="3">3</button>
+            <button data-d="4">4</button><button data-d="5">5</button><button data-d="6">6</button>
+            <button data-d="7">7</button><button data-d="8">8</button><button data-d="9">9</button>
+            <button data-d="back">⌫</button><button data-d="0">0</button><button data-d="call" class="call">☎</button>
+          </div>
+          <p class="status" id="call-status"></p>
+          <div class="hidden" id="incoming">
+            <p class="overline">INCOMING CALL</p>
+            <div class="number" id="incoming-num"></div>
+            <div class="row gap center">
+              <button class="btn primary" id="btn-accept">Accept</button>
+              <button class="btn danger" id="btn-decline">Decline</button>
+            </div>
+          </div>
+          <div class="hidden" id="voice-panel">
+            <p class="overline">VOICE CHANNEL (assist path)</p>
+            <p class="muted small">Live audio rides the mesh L4 path when a route exists. Here, you trade encrypted voice notes until then.</p>
+            <div id="voice-list" class="voicelist"></div>
+            <button class="btn primary block" id="btn-rec">● Record</button>
+            <audio id="voice-audio" controls class="block"></audio>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHATS -->
+      <div class="view hidden" id="view-chats">
+        <div class="glass card startcard">
+          <input id="peer-num" placeholder="700 0000 000" inputmode="numeric" maxlength="14">
+          <button class="btn primary" id="btn-start">Start</button>
+        </div>
+        <div id="conv-list"></div>
+        <div class="hidden" id="chat">
+          <div class="glass card chathead">
+            <button class="btn ghost small" id="btn-back">‹ Chats</button>
+            <div class="name" id="chat-peer"></div>
+          </div>
+          <div id="bubbles"></div>
+          <div class="composer glass">
+            <input id="msg" placeholder="Encrypted message…">
+            <button class="btn primary" id="btn-send">Send</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SITES -->
+      <div class="view hidden" id="view-sites">
+        <div class="glass card startcard">
+          <input id="site-url" placeholder="genesis.me.ae" autocapitalize="off">
+          <button class="btn primary" id="btn-go">Open</button>
+        </div>
+        <div class="glass card">
+          <p class="overline">PUBLISH YOUR SITE</p>
+          <p class="muted small">Import local files or a GitHub folder, deploy from here, get a live .ae domain on the network.</p>
+          <input type="file" id="site-files" multiple>
+          <button class="btn block" id="btn-publish">Deploy to my domain</button>
+          <p class="status" id="pub-status"></p>
+        </div>
+        <iframe id="site-frame" class="hidden" sandbox="allow-same-origin" title="aether site"></iframe>
+        <div id="site-out" class="glass card hidden"><pre id="site-pre"></pre></div>
+      </div>
+
+      <!-- STATUS -->
+      <div class="view hidden" id="view-status">
+        <div class="glass card">
+          <p class="overline">IDENTITY</p>
+          <div class="kv"><span>number</span><b id="st-number">—</b></div>
+          <div class="kv"><span>handle</span><b id="st-handle">—</b></div>
+          <div class="kv"><span>domain</span><b id="st-domain">—</b></div>
+          <div class="kv"><span>tier</span><b id="st-tier">—</b></div>
+          <div class="kv"><span>email pointer</span><b id="st-email">—</b></div>
+          <div class="kv"><span>fingerprint</span><b id="st-fp" class="mono">—</b></div>
+          <p class="muted small">The fingerprint is your safety number — compare it with your contact out-of-band; if it matches, the channel is truly yours.</p>
+        </div>
+        <div class="glass card">
+          <p class="overline">NETWORK</p>
+          <div class="kv"><span>assist endpoint</span><b class="mono" id="st-endpoint">—</b></div>
+          <div class="kv"><span>assist health</span><b id="st-assist">—</b></div>
+          <div class="kv"><span>registry</span><b id="st-registry">—</b></div>
+          <div class="kv"><span>live envelopes</span><b id="st-mail">—</b></div>
+          <label>Assist endpoint <span class="hint">(or run your own: node api/sandbox-server.js)</span>
+            <input id="in-endpoint" class="mono"></label>
+          <button class="btn block" id="btn-endpoint">Save endpoint</button>
+        </div>
+        <div class="glass card">
+          <p class="overline">DANGER</p>
+          <button class="btn danger block" id="btn-wipe">Erase identity from this device</button>
+        </div>
+      </div>
+    </main>
+
+    <nav class="tabbar glass">
+      <button class="tab selected" data-view="dialer">☎<span>Dialer</span></button>
+      <button class="tab" data-view="chats">✉<span>Chats</span></button>
+      <button class="tab" data-view="sites">◎<span>Sites</span></button>
+      <button class="tab" data-view="status">⌂<span>Status</span></button>
+    </nav>
+  </div>
+</section>
+
+<script type="module" src="/aether.js"></script>
+</body>
+</html>

@@ -46,6 +46,28 @@ class IdentityStore(context: Context) {
         save(rebuilt, handle)
     }
 
+    /**
+     * Persist the human profile bound to the identity: display name and the
+     * off-network email pointer. Both are optional and stored alongside the
+     * seed so the claim record carries them without a second secret.
+     */
+    fun saveProfile(name: String?, email: String?) {
+        val o = runCatching { JSONObject(file.readText()) }.getOrDefault(JSONObject())
+        o.put("display_name", name ?: "")
+        o.put("email_pointer", email ?: "")
+        file.writeText(o.toString())
+    }
+
+    /** Returns (displayName, emailPointer), either may be null. */
+    fun loadProfile(): Pair<String?, String?> {
+        if (!file.exists()) return null to null
+        return runCatching {
+            val o = JSONObject(file.readText())
+            o.optString("display_name").ifEmpty { null } to
+                o.optString("email_pointer").ifEmpty { null }
+        }.getOrDefault(null to null)
+    }
+
     private fun b64(b: ByteArray): String =
         android.util.Base64.encodeToString(b, android.util.Base64.NO_WRAP)
 

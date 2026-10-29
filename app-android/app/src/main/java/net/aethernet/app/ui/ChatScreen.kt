@@ -22,6 +22,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -51,6 +53,7 @@ import net.aethernet.app.data.MessageStore
 fun ChatScreen(identity: Identity, peerNumber: String, onBack: () -> Unit) {
     var input by remember { mutableStateOf("") }
     var tick by remember { mutableStateOf(0) }
+    var viaAssist by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     LaunchedEffect(Unit) {
@@ -116,6 +119,24 @@ fun ChatScreen(identity: Identity, peerNumber: String, onBack: () -> Unit) {
         Row(
             Modifier
                 .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            FilterChip(
+                selected = viaAssist,
+                onClick = { viaAssist = !viaAssist },
+                label = { Text(if (viaAssist) "assist path" else "mesh path") },
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = Glass.GlassFill,
+                    selectedContainerColor = Glass.AccentGlow.copy(alpha = 0.35f),
+                    labelColor = Glass.InkDim,
+                    selectedLabelColor = Glass.Ink,
+                ),
+            )
+        }
+        Row(
+            Modifier
+                .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -143,6 +164,45 @@ fun ChatScreen(identity: Identity, peerNumber: String, onBack: () -> Unit) {
                     .clickable {
                         val text = input.trim()
                         if (text.isNotEmpty()) {
+                            if (viaAssist) {
+                                // Internet-assisted delivery: sealed envelope
+                                // through the endpoint, which sees only ciphertext.
+                                val id = "a" + System.currentTimeMillis().toString(16)
+                                var ok = false
+                                var err = ""
+                                runCatching {
+                                    val client = net.aethernet.app.net.AssistClient(NetGraph.assistEndpoint)
+                                    val resolve = client.resolve(peerNumber)
+                                    val rec = (resolve as? net.aethernet.app.net.AssistClient.Result.Ok)
+                                        ?.json?.optJSONObject("record")
+                                    if (rec == null) {
+                                        err = "peer not on registry"
+                                    } else {
+                                        val blob = net.aethernet.app.net.AssistClient.sealToRecordPubkey(
+                                            rec.optString("pubkey"),
+                                            org.json.JSONObject()
+                                                .put("kind", "message")
+                                                .put("text", text)
+                                                .put("ts", System.currentTimeMillis()),
+                                        )
+                                        val drop = blob?.let {
+                                            client.mailDrop(peerNumber, identity.number.plain, it, "message", 3 * 24 * 3600)
+                                        }
+                                        ok = drop is net.aethernet.app.net.AssistClient.Result.Ok
+                                        if (!ok) err = (drop as? net.aethernet.app.net.AssistClient.Result.Err)?.message ?: "drop failed"
+                                    }
+                                }.onFailure { err = it.message ?: "assist error" }
+                                NetGraph.messages.append(
+                                    peerNumber,
+                                    MessageStore.Msg(
+                                        id = id,
+                                        ts = System.currentTimeMillis(),
+                                        outgoing = true,
+                                        text = text,
+                                        status = if (ok) MessageStore.Status.SENT else MessageStore.Status.PENDING,
+                                    )
+                                )
+                            } else {
                             val t = NetGraph.transport
                             val res = t?.sendText(peerNumber, text)
                             val id = (res as? net.aethernet.app.net.LanTransport.SendResult.Sent)?.msgId
@@ -159,6 +219,7 @@ fun ChatScreen(identity: Identity, peerNumber: String, onBack: () -> Unit) {
                                     else MessageStore.Status.PENDING,
                                 )
                             )
+                            }
                             input = ""
                             tick++
                         }

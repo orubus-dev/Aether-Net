@@ -81,6 +81,8 @@ class RegistryClient(private val token: String) {
     /**
      * Claim a number with its derivation counter. The record shape matches
      * registry/README.md schema 1 exactly, so the CI verifier accepts it.
+     * Optional display_name / email_pointer ride along as extra keys, which
+     * the verifier tolerates.
      */
     fun claimNumber(
         number: String,
@@ -88,6 +90,8 @@ class RegistryClient(private val token: String) {
         pubKeyB64: String,
         counter: Long,
         handle: String?,
+        displayName: String? = null,
+        emailPointer: String? = null,
     ): ClaimResult {
         val o = JSONObject()
             .put("number", number)
@@ -96,6 +100,8 @@ class RegistryClient(private val token: String) {
             .put("counter", counter)
             .put("created_at", nowRfc3339())
             .put("schema", 1)
+        if (!displayName.isNullOrEmpty()) o.put("display_name", displayName)
+        if (!emailPointer.isNullOrEmpty()) o.put("email_pointer", emailPointer)
         if (!handle.isNullOrEmpty()) {
             o.put("handle", handle)
             o.put("domain", if (tierName == "standard") "$handle.me.ae" else "$handle.ae")

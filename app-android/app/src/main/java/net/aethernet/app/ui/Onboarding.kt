@@ -12,6 +12,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,6 +41,9 @@ fun Onboarding(
 ) {
     var tier by remember { mutableStateOf(Tier.STANDARD) }
     var created by remember { mutableStateOf<Identity?>(null) }
+    var name by remember { mutableStateOf("") }
+    var handleInput by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
 
     LiquidBackground(Modifier.fillMaxSize())
     Column(
@@ -102,8 +107,57 @@ fun Onboarding(
 
         Column {
             if (created == null) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    placeholder = { Text("your name", color = Glass.InkFaint) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Glass.Ink,
+                        unfocusedTextColor = Glass.Ink,
+                        focusedBorderColor = Glass.AccentGlow,
+                        unfocusedBorderColor = Glass.GlassBorder,
+                        cursorColor = Glass.AccentGlow,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = handleInput,
+                    onValueChange = { handleInput = it.lowercase() },
+                    placeholder = { Text("username (genesis → genesis.me.ae)", color = Glass.InkFaint) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Glass.Ink,
+                        unfocusedTextColor = Glass.Ink,
+                        focusedBorderColor = Glass.AccentGlow,
+                        unfocusedBorderColor = Glass.GlassBorder,
+                        cursorColor = Glass.AccentGlow,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    placeholder = { Text("email pointer (optional, stored in your record)", color = Glass.InkFaint) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Glass.Ink,
+                        unfocusedTextColor = Glass.Ink,
+                        focusedBorderColor = Glass.AccentGlow,
+                        unfocusedBorderColor = Glass.GlassBorder,
+                        cursorColor = Glass.AccentGlow,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(14.dp))
                 GlowButton("Create my identity", Modifier.fillMaxWidth()) {
+                    // Persist the human profile with the identity; the claim
+                    // carries display_name / email_pointer alongside the keys.
+                    net.aethernet.app.NetGraph.setProfile(name.trim(), email.trim())
                     created = onCreate(tier)
+                    if (handleInput.isNotBlank()) net.aethernet.app.NetGraph.updateHandle(handleInput.trim())
                 }
             } else {
                 GlowButton("Enter AetherNet", Modifier.fillMaxWidth()) {

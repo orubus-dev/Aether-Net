@@ -1,0 +1,10 @@
+{
+  "name": "aethernet-assist",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "AetherNet assist layer — stateless serverless pipes over GitHub storage. No keys, no plaintext, no database.",
+  "engines": {
+    "node": ">=20"
+  }
+}
