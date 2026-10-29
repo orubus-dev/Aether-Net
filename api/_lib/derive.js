@@ -13,7 +13,7 @@
 // vendored @noble/hashes blake2b with dkLen 32 is identical to
 // hashlib.blake2b(digest_size=32) and the blake2 crate's Blake2b<U32>.
 
-import { blake2b } from "../_vendor/node_modules/@noble/hashes/esm/blake2b.js";
+import { blake2b } from "../_vendor/@noble/hashes/esm/blake2b.js";
 
 export const TIERS = {
   "500": "standard",
