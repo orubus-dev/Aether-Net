@@ -90,9 +90,15 @@
               <button class="btn danger" id="btn-decline">Decline</button>
             </div>
           </div>
-          <div class="hidden" id="voice-panel">
-            <p class="overline">VOICE CHANNEL (assist path)</p>
-            <p class="muted small">Live audio rides the mesh L4 path when a route exists. Here, you trade encrypted voice notes until then.</p>
+          <div class="hidden" id="live-call">
+            <p class="overline" id="call-state-label">IN CALL</p>
+            <div class="number" id="live-peer">—</div>
+            <div class="callmeta mono" id="call-timer">00:00</div>
+            <div class="row gap center">
+              <button class="btn ghost" id="btn-mute">Mute</button>
+              <button class="btn danger" id="btn-hangup">Hang up</button>
+            </div>
+            <p class="muted small">Audio is peer-to-peer and end-to-end encrypted (DTLS-SRTP). Signaling rides the assist path as sealed envelopes. Voice notes below are the fallback when NAT blocks the direct path.</p>
             <div id="voice-list" class="voicelist"></div>
             <button class="btn primary block" id="btn-rec">● Record</button>
             <audio id="voice-audio" controls class="block"></audio>
@@ -137,6 +143,16 @@
         <div id="site-out" class="glass card hidden"><pre id="site-pre"></pre></div>
       </div>
 
+      <!-- PEERS -->
+      <div class="view hidden" id="view-peers">
+        <div class="glass card">
+          <p class="overline">DIRECTORY — ONLINE NOW</p>
+          <p class="muted small">Heartbeats keep each device visible for two minutes at a time. Tap a peer to call; chats and calls are end-to-end encrypted either way.</p>
+          <button class="btn block" id="btn-refresh-peers">Refresh</button>
+          <div id="peer-list"></div>
+        </div>
+      </div>
+
       <!-- STATUS -->
       <div class="view hidden" id="view-status">
         <div class="glass card">
@@ -169,6 +185,7 @@
     <nav class="tabbar glass">
       <button class="tab selected" data-view="dialer">☎<span>Dialer</span></button>
       <button class="tab" data-view="chats">✉<span>Chats</span></button>
+      <button class="tab" data-view="peers">◌<span>Peers</span></button>
       <button class="tab" data-view="sites">◎<span>Sites</span></button>
       <button class="tab" data-view="status">⌂<span>Status</span></button>
     </nav>

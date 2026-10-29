@@ -227,3 +227,13 @@ input[type=file] { color: var(--ink-dim); padding: 10px 0; }
   .card { padding: 18px; }
   .number { font-size: 28px; }
 }
+
+/* ---------- live call ---------- */
+.callmeta {
+  font-size: 1.6rem;
+  color: var(--accent);
+  margin: 0.4rem 0 0.9rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
+.tabbar .tab { flex: 1; }

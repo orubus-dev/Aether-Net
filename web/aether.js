@@ -5,6 +5,10 @@
  * read them. Number derivation is byte-identical to the Rust core, the
  * Android app and the CI verifier:
  *   digits = BLAKE2b-256(pubkey || LE64(counter))[0..7] mod 10
+ *
+ * Calls: signaling rides sealed envelopes on the assist path; live audio
+ * is peer-to-peer WebRTC (DTLS-SRTP — end-to-end encrypted by protocol).
+ * The Rust core maps this 1:1 onto native L4 media sessions.
  */
 
 import { ed25519, x25519 } from "/vendor/node_modules/@noble/curves/esm/ed25519.js";
@@ -25,6 +29,7 @@ const concat = (...arrs) => {
 };
 const rand = (n) => crypto.getRandomValues(new Uint8Array(n));
 const DIGITS = (s) => s.replace(/[^0-9]/g, "");
+const mmss = (sec) => `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
 
 /* -------------------------------- identity ------------------------------- */
 
@@ -90,13 +95,11 @@ function fingerprint(pk) {
 
 const SIGMA_BYTES = new TextEncoder().encode("expand 32-byte k");
 
-function rotl(x, n) { return ((x << n) | (x >>> (32 - n))) >>> 0; }
+function rotl(x, n) { return ((x << n) | (x >>> 32 - n)) >>> 0; }
 
 /** HSalsa20 (Bernstein) — the combiner inside libsodium's crypto_box_beforenm. */
 function hsalsa20(key32, in16) {
   const le = (b, o) => (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0;
-  // classic Salsa20 state: sigma at 0/5/10/15, key at 1-4 & 11-14, input at 6-9
-  // (validated byte-for-byte against libsodium crypto_box_beforenm)
   const x = new Uint32Array(16);
   x[0] = le(SIGMA_BYTES, 0);
   x[1] = le(key32, 0); x[2] = le(key32, 4); x[3] = le(key32, 8); x[4] = le(key32, 12);
@@ -115,7 +118,6 @@ function hsalsa20(key32, in16) {
     qr(0, 4, 8, 12); qr(5, 9, 13, 1); qr(10, 14, 2, 6); qr(15, 3, 7, 11);
     qr(0, 1, 2, 3); qr(5, 6, 7, 4); qr(10, 11, 8, 9); qr(15, 12, 13, 14);
   }
-  // output tap: 0,5,10,15,6,7,8,9 — 32 bytes
   const taps = [0, 5, 10, 15, 6, 7, 8, 9];
   const out = new Uint8Array(32);
   taps.forEach((t, i) => {
@@ -183,6 +185,15 @@ const dropSignal = (to, from, signal, blob) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ to, from, signal, blob: blob || b64(rand(16)), ttl: 120 }),
   });
+const listSignals = (box) => api(`/api/signal?box=${box}`);
+const pickSignal = (box, id) => api(`/api/signal?box=${box}&id=${id}`);
+const heartbeat = (number, fp, name) =>
+  api("/api/presence", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ number, fingerprint: fp, display_name: name }),
+  });
+const directory = () => api("/api/presence");
 
 /* ------------------------------- onboarding ------------------------------ */
 
@@ -272,6 +283,7 @@ function enterApp() {
   $("me-name").textContent = me.name || "anon";
   $("me-number").textContent = `${display(me.number)} · ${me.handle || "no handle"}`;
   fillStatus();
+  heartbeat(me.number, fingerprint(me.pk), me.name || "peer").catch(() => {});
   pollLoop();
 }
 
@@ -282,6 +294,7 @@ document.querySelectorAll(".tab").forEach((t) =>
     document.querySelectorAll(".view").forEach((v) => v.classList.add("hidden"));
     $(`view-${t.dataset.view}`).classList.remove("hidden");
     if (t.dataset.view === "status") fillStatus();
+    if (t.dataset.view === "peers") renderDirectory();
   })
 );
 
@@ -341,40 +354,189 @@ document.querySelectorAll(".pad button").forEach((b) =>
   })
 );
 
-let activeCall = null; // {peer, state}
+/* ------------------------------- live calls ------------------------------ */
+/* Signaling: sealed envelopes over the assist path.
+     caller -> ring   {t:"offer",  sdp}    (offer rides the ring)
+     callee -> accept (plain)  +  payload {t:"answer", sdp}
+     both   -> payload {t:"ice", candidate}
+     either -> hangup / decline
+   Media: direct WebRTC audio (DTLS-SRTP, end-to-end encrypted). */
+
+const RTC_CONFIG = {
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+  ],
+};
+
+let activeCall = null; // {peer, role, pc, stream, state, started, pendingIce[], timer}
+let incoming = null;   // caller number when ringing
+
+function callStatus(text) { $("call-status").textContent = text; }
+
+function setLiveUI(state, peer) {
+  const labels = { connecting: "CONNECTING", live: "IN CALL", ending: "ENDING" };
+  $("live-call").classList.toggle("hidden", state === null);
+  $("incoming").classList.toggle("hidden", state !== "incoming");
+  if (state === "incoming") {
+    $("incoming-num").textContent = display(peer);
+  } else if (state) {
+    $("call-state-label").textContent = labels[state] || "CALL";
+    $("live-peer").textContent = display(peer);
+  }
+}
+
+function startTimer() {
+  const started = Date.now();
+  activeCall.timer = setInterval(() => {
+    $("call-timer").textContent = mmss(Math.floor((Date.now() - started) / 1000));
+  }, 1000);
+}
+
+function stopTimer() {
+  if (activeCall && activeCall.timer) { clearInterval(activeCall.timer); activeCall.timer = null; }
+  const t = $("call-timer");
+  if (t) t.textContent = "00:00";
+}
+
+async function getMic() {
+  return navigator.mediaDevices.getUserMedia({
+    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+  });
+}
+
+function wirePeerEvents(pc, peer) {
+  pc.onicecandidate = (e) => {
+    if (e.candidate && activeCall && activeCall.peer === peer) {
+      sealToNumber(peer, { t: "ice", candidate: e.candidate.toJSON() })
+        .then((blob) => dropSignal(peer, me.number, "payload", blob))
+        .catch(() => {});
+    }
+  };
+  pc.onconnectionstatechange = () => {
+    if (!activeCall || activeCall.peer !== peer) return;
+    if (pc.connectionState === "connected") {
+      activeCall.state = "live";
+      setLiveUI("live", peer);
+      callStatus("peer-to-peer audio live");
+      startTimer();
+    } else if (pc.connectionState === "failed") {
+      callStatus("connection failed — NAT blocked the direct path (assist voice notes still work)");
+      endCall(false);
+    }
+  };
+  pc.ontrack = (e) => {
+    const remote = new Audio();
+    remote.srcObject = e.streams[0];
+    remote.autoplay = true;
+    remote.id = "remote-audio";
+    document.getElementById("remote-audio")?.remove();
+    document.body.appendChild(remote);
+  };
+}
 
 async function placeCall() {
   if (dialed.length !== 10) return;
-  const st = $("call-status");
-  st.textContent = `resolving ${display(dialed)}…`;
-  const rec = await resolveNumber(dialed);
-  if (!rec) { st.textContent = "not on the network (yet)"; return; }
-  st.textContent = "ringing…";
-  activeCall = { peer: dialed, state: "ringing", started: Date.now() };
-  const r = await dropSignal(dialed, me.number, "ring");
-  st.textContent = r._status === 201 ? `ringing ${display(dialed)} — awaiting answer` : `could not ring: ${r.error || "?"}`;
-  setTimeout(() => { if (activeCall && activeCall.state === "ringing") { activeCall = null; st.textContent = "no answer"; } }, 30000);
+  if (activeCall) { callStatus("line busy — hang up first"); return; }
+  const peer = dialed;
+  const st = callStatus;
+  st(`resolving ${display(peer)}…`);
+  const rec = await resolveNumber(peer);
+  if (!rec) { st("not on the network (yet)"); return; }
+  let stream;
+  try {
+    stream = await getMic();
+  } catch {
+    st("microphone unavailable — allow mic access to call");
+    return;
+  }
+  const pc = new RTCPeerConnection(RTC_CONFIG);
+  activeCall = { peer, role: "caller", pc, stream, state: "ringing", pendingIce: [], timer: null };
+  stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+  wirePeerEvents(pc, peer);
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  st(`ringing ${display(peer)}…`);
+  const blob = await sealToNumber(peer, { t: "offer", sdp: pc.localDescription.sdp });
+  const r = await dropSignal(peer, me.number, "ring", blob);
+  if (r._status !== 201) { st(`could not ring: ${r.error || "?"}`); endCall(false); return; }
+  setLiveUI("connecting", peer);
+  setTimeout(() => {
+    if (activeCall && activeCall.state === "ringing") {
+      st("no answer");
+      dropSignal(peer, me.number, "hangup").catch(() => {});
+      endCall(false);
+    }
+  }, 30000);
 }
+
+async function answerCall(fromNumber, offerSdp) {
+  if (activeCall) return false;
+  let stream;
+  try {
+    stream = await getMic();
+  } catch {
+    await dropSignal(fromNumber, me.number, "decline");
+    callStatus("missed — microphone unavailable");
+    return false;
+  }
+  const pc = new RTCPeerConnection(RTC_CONFIG);
+  activeCall = { peer: fromNumber, role: "callee", pc, stream, state: "connecting", pendingIce: [], timer: null };
+  stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+  wirePeerEvents(pc, fromNumber);
+  await pc.setRemoteDescription({ type: "offer", sdp: offerSdp });
+  for (const c of activeCall.pendingIce.splice(0)) {
+    try { await pc.addIceCandidate(c); } catch { /* stale candidate */ }
+  }
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  await dropSignal(fromNumber, me.number, "accept");
+  const blob = await sealToNumber(fromNumber, { t: "answer", sdp: pc.localDescription.sdp });
+  await dropSignal(fromNumber, me.number, "payload", blob);
+  setLiveUI("connecting", fromNumber);
+  callStatus("connecting…");
+  return true;
+}
+
+async function endCall(sendHangup = true) {
+  if (!activeCall) return;
+  const { peer, pc, stream, state } = activeCall;
+  stopTimer();
+  if (sendHangup && peer) dropSignal(peer, me.number, state === "ringing" ? "decline" : "hangup").catch(() => {});
+  try { pc && pc.close(); } catch {}
+  stream && stream.getTracks().forEach((t) => t.stop());
+  document.getElementById("remote-audio")?.remove();
+  activeCall = null;
+  $("btn-mute").textContent = "Mute";
+  setLiveUI(null);
+  callStatus("call ended");
+}
+
+$("btn-hangup").addEventListener("click", () => endCall(true));
+$("btn-mute").addEventListener("click", () => {
+  if (!activeCall || !activeCall.stream) return;
+  const track = activeCall.stream.getAudioTracks()[0];
+  if (!track) return;
+  track.enabled = !track.enabled;
+  $("btn-mute").textContent = track.enabled ? "Mute" : "Unmute";
+});
 
 $("btn-accept").addEventListener("click", async () => {
   if (!incoming) return;
-  await dropSignal(incoming, me.number, "accept");
-  openVoice(incoming);
+  const from = incoming;
+  incoming = null;
+  setLiveUI(null);
+  const ok = await answerCall(from, $("incoming-num").dataset.offer);
+  if (!ok) callStatus("could not answer");
 });
 $("btn-decline").addEventListener("click", async () => {
-  if (incoming) await dropSignal(incoming, me.number, "decline");
-  $("incoming").classList.add("hidden");
+  if (incoming) await dropSignal(incoming, me.number, "decline").catch(() => {});
   incoming = null;
+  setLiveUI(null);
+  callStatus("declined");
 });
 
-function openVoice(peer) {
-  $("call-status").textContent = `connected with ${display(peer)} (assist path)`;
-  $("voice-panel").classList.remove("hidden");
-  activeCall = { peer, state: "live", started: Date.now() };
-  renderVoice();
-}
-
-/* voice notes: MediaRecorder → sealed envelope → mail */
+/* voice notes: MediaRecorder → sealed envelope → mail (the assist fallback) */
 let recording = null;
 $("btn-rec").addEventListener("click", async () => {
   if (recording) { recording.stop(); return; }
@@ -387,12 +549,12 @@ $("btn-rec").addEventListener("click", async () => {
       stream.getTracks().forEach((t) => t.stop());
       $("btn-rec").textContent = "● Record";
       const blob = new Blob(chunks, { type: recording.mimeType });
-      if (blob.size > 1_100_000) { $("call-status").textContent = "voice note too long (max ~60s on assist path)"; return; }
+      if (blob.size > 1_100_000) { callStatus("voice note too long (max ~60s on assist path)"); return; }
       if (activeCall) {
         const buf = new Uint8Array(await blob.arrayBuffer());
         const sealed = await sealToNumber(activeCall.peer, { kind: "voice", mime: blob.type, data: b64(buf) });
         const r = await dropMail(activeCall.peer, me.number, sealed, "voice", 3 * 24 * 3600);
-        $("call-status").textContent = r._status === 201 ? "voice note delivered" : "delivery failed";
+        callStatus(r._status === 201 ? "voice note delivered" : "delivery failed");
         addVoiceNote(URL.createObjectURL(blob), "out");
       }
       recording = null;
@@ -400,7 +562,7 @@ $("btn-rec").addEventListener("click", async () => {
     recording.start();
     $("btn-rec").textContent = "■ Stop";
   } catch {
-    $("call-status").textContent = "microphone unavailable";
+    callStatus("microphone unavailable");
     recording = null;
   }
 });
@@ -415,7 +577,37 @@ function addVoiceNote(url, dir) {
   $("voice-list").appendChild(div);
 }
 
-function renderVoice() {}
+/* --------------------------------- peers --------------------------------- */
+
+$("btn-refresh-peers").addEventListener("click", renderDirectory);
+
+async function renderDirectory() {
+  const list = $("peer-list");
+  list.innerHTML = `<div class="conv glass"><div class="preview">reading directory…</div></div>`;
+  try {
+    const r = await directory();
+    const rows = (r.online || []).filter((p) => p.number !== me.number);
+    if (!rows.length) {
+      list.innerHTML = `<div class="conv glass"><div class="num">nobody online</div><div class="preview">Open this app on a second device, claim its number, and it appears here within a minute.</div></div>`;
+      return;
+    }
+    list.innerHTML = "";
+    for (const p of rows) {
+      const div = document.createElement("div");
+      div.className = "conv glass";
+      div.innerHTML = `<div><div class="num">${p.display_name ? `${p.display_name.replace(/</g, "&lt;")} · ` : ""}${display(p.number)}</div><div class="preview mono">${(p.fingerprint || "").replace(/</g, "&lt;")}</div></div><div class="when">online</div>`;
+      div.addEventListener("click", () => {
+        dialed = p.number;
+        $("dial-num").textContent = display(dialed);
+        document.querySelector('.tab[data-view="dialer"]').click();
+        placeCall();
+      });
+      list.appendChild(div);
+    }
+  } catch {
+    list.innerHTML = `<div class="conv glass"><div class="preview">directory unreachable</div></div>`;
+  }
+}
 
 /* --------------------------------- chats --------------------------------- */
 
@@ -524,8 +716,6 @@ async function openSite() {
     return;
   }
   const html = new TextDecoder().decode(unb64(r.content));
-  // rewrite relative links so navigation stays on aether
-  const base = name.replace(/\.ae$/, "") + "";
   const doc = html.replace(/(href|src)=["'](?!https?:|data:|#|\/)([^"']+)["']/g, `$1="/api/sites?name=${encodeURIComponent(name)}&path=$2"`);
   $("site-frame").srcdoc = doc;
 }
@@ -558,8 +748,6 @@ $("btn-publish").addEventListener("click", async () => {
 
 /* -------------------------------- polling -------------------------------- */
 
-let incoming = null;
-
 async function pollOnce() {
   if (!me) return;
   try {
@@ -579,6 +767,22 @@ async function pollOnce() {
   } catch { /* endpoint asleep; retry next tick */ }
 }
 
+async function pollSignals() {
+  if (!me) return;
+  try {
+    const m = await listSignals(me.number);
+    for (const env of m.envelopes || []) {
+      const picked = await pickSignal(me.number, env.id);
+      if (!picked.envelope) continue;
+      let inner = null;
+      try {
+        inner = JSON.parse(new TextDecoder().decode(unseal(unb64(picked.envelope.blob))));
+      } catch { inner = null; }
+      handleSignal(picked.envelope, inner);
+    }
+  } catch { /* retry next tick */ }
+}
+
 function handleEnvelope(env, inner) {
   if (inner.kind === "message") {
     const c = chats();
@@ -586,30 +790,80 @@ function handleEnvelope(env, inner) {
     c[env.from].push({ dir: "in", text: inner.text, ts: inner.ts || Date.now() });
     saveChats(c);
     if (openPeer === env.from) renderBubbles(); else renderConvs();
-  } else if (env.kind === "signal") {
-    if (env.signal === "ring" && !activeCall) {
-      incoming = env.from;
-      $("incoming").classList.remove("hidden");
-      $("incoming-num").textContent = display(env.from);
-      $("incoming-num").dataset.num = env.from;
-    } else if (env.signal === "accept" && activeCall && activeCall.peer === env.from) {
-      openVoice(env.from);
-    } else if (env.signal === "decline" && activeCall && activeCall.peer === env.from) {
-      activeCall = null;
-      $("call-status").textContent = "call declined";
+  } else if (inner.kind === "voice") {
+    if (activeCall && activeCall.peer === env.from) {
+      const bin = Uint8Array.from(atob(inner.data), (c) => c.charCodeAt(0));
+      addVoiceNote(URL.createObjectURL(new Blob([bin], { type: inner.mime })), "in");
     }
-  } else if (inner.kind === "voice" && activeCall && activeCall.peer === env.from) {
-    const bin = Uint8Array.from(atob(inner.data), (c) => c.charCodeAt(0));
-    addVoiceNote(URL.createObjectURL(new Blob([bin], { type: inner.mime })), "in");
+  }
+}
+
+function handleSignal(env, inner) {
+  const from = env.from;
+  if (!activeCall && incoming !== from) {
+    // only the newest ring matters
+  }
+  switch (env.signal) {
+    case "ring": {
+      if (activeCall) { dropSignal(from, me.number, "decline").catch(() => {}); return; }
+      if (!inner || inner.t !== "offer" || !inner.sdp) { dropSignal(from, me.number, "decline").catch(() => {}); return; }
+      incoming = from;
+      $("incoming-num").dataset.offer = inner.sdp;
+      setLiveUI("incoming", from);
+      callStatus("");
+      break;
+    }
+    case "accept": {
+      if (activeCall && activeCall.peer === from && activeCall.role === "caller" && activeCall.state === "ringing") {
+        activeCall.state = "connecting";
+        setLiveUI("connecting", from);
+        callStatus("connecting…");
+      }
+      break;
+    }
+    case "payload": {
+      if (!inner || !activeCall || activeCall.peer !== from) return;
+      if (inner.t === "answer" && activeCall.role === "caller") {
+        activeCall.pc.setRemoteDescription({ type: "answer", sdp: inner.sdp }).then(async () => {
+          for (const c of activeCall.pendingIce.splice(0)) {
+            try { await activeCall.pc.addIceCandidate(c); } catch { /* stale */ }
+          }
+        }).catch(() => { callStatus("handshake failed"); endCall(false); });
+      } else if (inner.t === "ice" && inner.candidate) {
+        if (activeCall.pc.remoteDescription && activeCall.pc.remoteDescription.type) {
+          activeCall.pc.addIceCandidate(inner.candidate).catch(() => {});
+        } else {
+          activeCall.pendingIce.push(inner.candidate);
+        }
+      }
+      break;
+    }
+    case "decline": {
+      if (activeCall && activeCall.peer === from) {
+        callStatus("call declined");
+        endCall(false);
+      }
+      break;
+    }
+    case "hangup": {
+      if (activeCall && activeCall.peer === from) {
+        callStatus("peer hung up");
+        endCall(false);
+      } else if (incoming === from) {
+        incoming = null;
+        setLiveUI(null);
+      }
+      break;
+    }
   }
 }
 
 function pollLoop() {
   pollOnce();
+  pollSignals();
   setInterval(pollOnce, 8000);
-  setInterval(() => { // keep call ring fresh
-    if (activeCall && activeCall.state === "ringing") dropSignal(activeCall.peer, me.number, "ring").catch(() => {});
-  }, 15000);
+  setInterval(pollSignals, 2500);          // call setup needs snappier signaling
+  setInterval(() => heartbeat(me.number, fingerprint(me.pk), me.name || "peer").catch(() => {}), 60000);
 }
 
 /* --------------------------------- boot ---------------------------------- */

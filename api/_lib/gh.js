@@ -77,6 +77,24 @@ export async function ghDelete(path, sha, message) {
   throw new Error(`ghDelete ${path}: HTTP ${r.status}`);
 }
 
+/** Create or update a file (PUT with sha when it exists). */
+export async function ghUpsert(path, contentB64, message) {
+  const existing = await ghGet(path);
+  const body = { message, content: contentB64 };
+  if (existing && existing.sha) body.sha = existing.sha;
+  const r = await fetch(`${API}/repos/${REPO}/contents/${encodePath(path)}`, {
+    method: "PUT",
+    headers: { ...GH_HEADERS(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (r.status === 200 || r.status === 201) {
+    const j = await r.json();
+    return { ok: true, commit: j.commit && j.commit.sha, sha: j.content && j.content.sha };
+  }
+  const text = await r.text();
+  throw new Error(`ghUpsert ${path}: HTTP ${r.status} ${text.slice(0, 200)}`);
+}
+
 /** Raw read of a public file — no token, CDN cached. Returns Buffer or null. */
 export async function rawGet(path, ref = "main") {
   const r = await fetch(
