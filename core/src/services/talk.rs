@@ -6,9 +6,7 @@
 //! `CallSignal` exchange that binds a call to an L4 media session.
 //! Pure logic, deterministic, no I/O: the runtime drives it from events.
 
-use crate::transport::media::{
-    CallSignal, MediaCodec, CALL_ID_LENGTH, MediaError,
-};
+use crate::transport::media::{CALL_ID_LENGTH, CallSignal, MediaCodec, MediaError};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 
@@ -337,11 +335,12 @@ impl CallRegistry {
         })
     }
 
-    pub fn accept(&mut self, call_id: &[u8; CALL_ID_LENGTH], now_unix: u64) -> Result<CallSignal, TalkError> {
-        let call = self
-            .calls
-            .get_mut(call_id)
-            .ok_or(TalkError::CallNotFound)?;
+    pub fn accept(
+        &mut self,
+        call_id: &[u8; CALL_ID_LENGTH],
+        now_unix: u64,
+    ) -> Result<CallSignal, TalkError> {
+        let call = self.calls.get_mut(call_id).ok_or(TalkError::CallNotFound)?;
         if call.state != CallState::Ringing || call.role != CallRole::Callee {
             return Err(TalkError::InvalidTransition);
         }
@@ -352,11 +351,12 @@ impl CallRegistry {
         })
     }
 
-    pub fn mark_accepted(&mut self, call_id: &[u8; CALL_ID_LENGTH], now_unix: u64) -> Result<(), TalkError> {
-        let call = self
-            .calls
-            .get_mut(call_id)
-            .ok_or(TalkError::CallNotFound)?;
+    pub fn mark_accepted(
+        &mut self,
+        call_id: &[u8; CALL_ID_LENGTH],
+        now_unix: u64,
+    ) -> Result<(), TalkError> {
+        let call = self.calls.get_mut(call_id).ok_or(TalkError::CallNotFound)?;
         if call.state != CallState::Ringing || call.role != CallRole::Caller {
             return Err(TalkError::InvalidTransition);
         }
@@ -365,11 +365,12 @@ impl CallRegistry {
         Ok(())
     }
 
-    pub fn end(&mut self, call_id: &[u8; CALL_ID_LENGTH], now_unix: u64) -> Result<CallSignal, TalkError> {
-        let call = self
-            .calls
-            .get_mut(call_id)
-            .ok_or(TalkError::CallNotFound)?;
+    pub fn end(
+        &mut self,
+        call_id: &[u8; CALL_ID_LENGTH],
+        now_unix: u64,
+    ) -> Result<CallSignal, TalkError> {
+        let call = self.calls.get_mut(call_id).ok_or(TalkError::CallNotFound)?;
         if call.state == CallState::Ended {
             return Err(TalkError::InvalidTransition);
         }
@@ -380,11 +381,12 @@ impl CallRegistry {
         })
     }
 
-    pub fn mark_ended(&mut self, call_id: &[u8; CALL_ID_LENGTH], now_unix: u64) -> Result<(), TalkError> {
-        let call = self
-            .calls
-            .get_mut(call_id)
-            .ok_or(TalkError::CallNotFound)?;
+    pub fn mark_ended(
+        &mut self,
+        call_id: &[u8; CALL_ID_LENGTH],
+        now_unix: u64,
+    ) -> Result<(), TalkError> {
+        let call = self.calls.get_mut(call_id).ok_or(TalkError::CallNotFound)?;
         if call.state == CallState::Ended {
             return Err(TalkError::InvalidTransition);
         }
@@ -439,12 +441,16 @@ mod tests {
     #[test]
     fn directory_marks_sweeps_and_times_out_presence() {
         let mut directory = Directory::new();
-        assert!(directory
-            .mark_seen("5001234567", "aa:bb", "Orubus", 1_000)
-            .unwrap());
-        assert!(!directory
-            .mark_seen("5001234567", "aa:bb", "Orubus", 1_010)
-            .unwrap());
+        assert!(
+            directory
+                .mark_seen("5001234567", "aa:bb", "Orubus", 1_000)
+                .unwrap()
+        );
+        assert!(
+            !directory
+                .mark_seen("5001234567", "aa:bb", "Orubus", 1_010)
+                .unwrap()
+        );
         assert_eq!(directory.online(1_010).len(), 1);
         assert_eq!(directory.online(1_010 + PRESENCE_TTL_SECONDS).len(), 1);
         assert_eq!(directory.online(1_010 + PRESENCE_TTL_SECONDS + 1).len(), 0);
@@ -458,7 +464,10 @@ mod tests {
         directory
             .mark_seen("5001234567", "aa", "x".repeat(200), 0)
             .unwrap();
-        assert_eq!(directory.lookup("5001234567").unwrap().display_name.len(), DISPLAY_NAME_MAX);
+        assert_eq!(
+            directory.lookup("5001234567").unwrap().display_name.len(),
+            DISPLAY_NAME_MAX
+        );
     }
 
     #[test]
@@ -471,7 +480,10 @@ mod tests {
             .park("5001234567", "5000000001", "message", b"two".to_vec(), 11)
             .unwrap();
         assert_eq!(spool.pending("5001234567"), 2);
-        assert_eq!(spool.park("5001234567", "5000000001", "message", b"three".to_vec(), 12), Err(TalkError::SpoolFull));
+        assert_eq!(
+            spool.park("5001234567", "5000000001", "message", b"three".to_vec(), 12),
+            Err(TalkError::SpoolFull)
+        );
         let drained = spool.drain("5001234567");
         assert_eq!(drained.len(), 2);
         assert_eq!(drained[0].payload, b"one");
@@ -521,7 +533,10 @@ mod tests {
             .on_incoming_invite(second, "5007654321", "opus", 110)
             .unwrap();
         assert!(matches!(busy, CallSignal::Busy { .. }));
-        assert!(registry.get(&second).is_none(), "busy reply does not register a call");
+        assert!(
+            registry.get(&second).is_none(),
+            "busy reply does not register a call"
+        );
     }
 
     #[test]
@@ -533,6 +548,10 @@ mod tests {
             .unwrap();
         let end = registry.end(&incoming, 10).unwrap();
         assert!(matches!(end, CallSignal::End { .. }));
-        assert!(registry.on_incoming_invite([0x66; CALL_ID_LENGTH], "5000000002", "aac", 0).is_err());
+        assert!(
+            registry
+                .on_incoming_invite([0x66; CALL_ID_LENGTH], "5000000002", "aac", 0)
+                .is_err()
+        );
     }
 }

@@ -14,7 +14,7 @@ pub use service::{ServiceDescriptor, ServiceId, ServiceKind};
 
 pub use policy::ServiceTrafficPolicy;
 pub use talk::{
-    CallEntry, CallRegistry, CallRole, CallState, Directory, MessageSpool, PresenceEntry,
-    SpooledMessage, TalkError, DEFAULT_MAX_PEERS, DEFAULT_MAX_SPOOLED_PER_PEER,
-    DISPLAY_NAME_MAX, PRESENCE_TTL_SECONDS,
+    CallEntry, CallRegistry, CallRole, CallState, DEFAULT_MAX_PEERS, DEFAULT_MAX_SPOOLED_PER_PEER,
+    DISPLAY_NAME_MAX, Directory, MessageSpool, PRESENCE_TTL_SECONDS, PresenceEntry, SpooledMessage,
+    TalkError,
 };

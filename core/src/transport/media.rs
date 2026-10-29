@@ -358,11 +358,7 @@ impl MediaMux {
         if self.sessions.len() >= self.max_sessions {
             return Err(MediaError::CapacityExceeded);
         }
-        if self
-            .sessions
-            .insert(session.call_id(), session)
-            .is_some()
-        {
+        if self.sessions.insert(session.call_id(), session).is_some() {
             return Err(MediaError::DuplicateCall);
         }
         Ok(())
@@ -372,10 +368,7 @@ impl MediaMux {
         self.sessions.remove(call_id)
     }
 
-    pub fn get_mut(
-        &mut self,
-        call_id: &[u8; CALL_ID_LENGTH],
-    ) -> Option<&mut MediaSession> {
+    pub fn get_mut(&mut self, call_id: &[u8; CALL_ID_LENGTH]) -> Option<&mut MediaSession> {
         self.sessions.get_mut(call_id)
     }
 
@@ -384,7 +377,11 @@ impl MediaMux {
     }
 
     /// Route one datagram to its session. Returns the demuxed call id.
-    pub fn demux(&mut self, bytes: &[u8], arrival_ms: u64) -> Result<[u8; CALL_ID_LENGTH], MediaError> {
+    pub fn demux(
+        &mut self,
+        bytes: &[u8],
+        arrival_ms: u64,
+    ) -> Result<[u8; CALL_ID_LENGTH], MediaError> {
         let header = MediaFrameHeader::decode(bytes)?;
         let session = self
             .sessions
@@ -530,7 +527,10 @@ mod tests {
         };
         buffer.push(frame(0)).unwrap();
         buffer.push(frame(1)).unwrap();
-        assert_eq!(buffer.push(frame(2)).unwrap(), JitterPush::OverflowDroppedOldest);
+        assert_eq!(
+            buffer.push(frame(2)).unwrap(),
+            JitterPush::OverflowDroppedOldest
+        );
         assert_eq!(buffer.len(), 2);
         assert_eq!(buffer.pop().unwrap().sequence, 1);
         assert_eq!(buffer.pop().unwrap().sequence, 2);
@@ -557,7 +557,8 @@ mod tests {
     #[test]
     fn mux_routes_by_call_id() {
         let mut mux = MediaMux::new();
-        mux.open(MediaSession::new(call(), MediaCodec::Opus)).unwrap();
+        mux.open(MediaSession::new(call(), MediaCodec::Opus))
+            .unwrap();
         let other = [0xcd; CALL_ID_LENGTH];
         mux.open(MediaSession::new(other, MediaCodec::Pcm)).unwrap();
         assert_eq!(mux.call_ids().len(), 2);
@@ -582,10 +583,7 @@ mod tests {
         };
         let decoded = CallSignal::decode(&invite.encode()).unwrap();
         assert_eq!(decoded, invite);
-        assert_eq!(
-            call_id_from_hex(&call_id_hex(&call())).unwrap(),
-            call()
-        );
+        assert_eq!(call_id_from_hex(&call_id_hex(&call())).unwrap(), call());
         assert!(call_id_from_hex("zz").is_none());
     }
 }

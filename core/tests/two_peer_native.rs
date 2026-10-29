@@ -7,14 +7,10 @@
 //! clean end. This is the moment two Aether nodes speak native end-to-end.
 
 use aether_core::link::{SessionNegotiation, SessionRole};
-use aether_core::network::{
-    AetherAddress, AetherFlowId, L3Route, NodeId,
-};
+use aether_core::network::{AetherAddress, AetherFlowId, L3Route, NodeId};
 use aether_core::runtime::native_stack::{NativeAetherStack, NativeIngress};
-use aether_core::transport::media::{
-    CallSignal, MediaCodec, MediaMux, MediaSession,
-};
 use aether_core::transport::AetherTransportMode;
+use aether_core::transport::media::{CallSignal, MediaCodec, MediaMux, MediaSession};
 
 fn addr(seed: u8) -> AetherAddress {
     AetherAddress::from_bytes([seed; 32])
@@ -24,7 +20,13 @@ fn node(seed: u8) -> NodeId {
     NodeId::from_bytes([seed; 32])
 }
 
-fn paired_sessions(a: NodeId, b: NodeId) -> (aether_core::link::LinkSession, aether_core::link::LinkSession) {
+fn paired_sessions(
+    a: NodeId,
+    b: NodeId,
+) -> (
+    aether_core::link::LinkSession,
+    aether_core::link::LinkSession,
+) {
     let initiator = SessionNegotiation::create(SessionRole::Initiator).unwrap();
     let responder = SessionNegotiation::create(SessionRole::Responder).unwrap();
     let a_pub = initiator.local_ephemeral.public_key();
@@ -55,7 +57,11 @@ fn wired_stacks() -> (NativeAetherStack, NativeAetherStack) {
 /// Deliver one frame A -> B, return B's local delivery.
 fn a_to_b(a: &mut NativeAetherStack, b: &mut NativeAetherStack, frame: Vec<u8>) -> Vec<Vec<u8>> {
     match b.ingest_frame(node(1), &frame, 1, 1).unwrap() {
-        NativeIngress::Local { delivered, acknowledgement, .. } => {
+        NativeIngress::Local {
+            delivered,
+            acknowledgement,
+            ..
+        } => {
             // ACK frames flow back the other way on the same link pair.
             if let Some(ack) = acknowledgement {
                 a.ingest_frame(node(2), &ack, 1, 1).unwrap();
@@ -81,7 +87,10 @@ fn two_peers_exchange_reliable_stream_both_ways() {
         let frame = a
             .send_l4(addr(2), flow, message.as_bytes().to_vec(), 1, 1)
             .unwrap();
-        assert_eq!(a_to_b(&mut a, &mut b, frame), vec![message.as_bytes().to_vec()]);
+        assert_eq!(
+            a_to_b(&mut a, &mut b, frame),
+            vec![message.as_bytes().to_vec()]
+        );
     }
 
     // B -> A, the reverse direction over the same flow id.
@@ -89,7 +98,11 @@ fn two_peers_exchange_reliable_stream_both_ways() {
         .send_l4(addr(1), flow, b"reply from B".to_vec(), 1, 1)
         .unwrap();
     match a.ingest_frame(node(2), &frame, 1, 1).unwrap() {
-        NativeIngress::Local { delivered, acknowledgement, .. } => {
+        NativeIngress::Local {
+            delivered,
+            acknowledgement,
+            ..
+        } => {
             assert_eq!(delivered, vec![b"reply from B".to_vec()]);
             assert!(acknowledgement.is_some());
         }
@@ -115,8 +128,12 @@ fn two_peers_run_a_live_media_call_over_native_l4() {
     let call_id = [0x7e; 8];
     let mut mux_a = MediaMux::new();
     let mut mux_b = MediaMux::new();
-    mux_a.open(MediaSession::new(call_id, MediaCodec::Opus)).unwrap();
-    mux_b.open(MediaSession::new(call_id, MediaCodec::Opus)).unwrap();
+    mux_a
+        .open(MediaSession::new(call_id, MediaCodec::Opus))
+        .unwrap();
+    mux_b
+        .open(MediaSession::new(call_id, MediaCodec::Opus))
+        .unwrap();
 
     // --- call setup over the control flow (real JSON signals) ---
     let invite = CallSignal::Invite {
@@ -124,9 +141,7 @@ fn two_peers_run_a_live_media_call_over_native_l4() {
         codec: "opus".into(),
         display_name: Some("Node A".into()),
     };
-    let frame = a
-        .send_l4(addr(2), control, invite.encode(), 1, 1)
-        .unwrap();
+    let frame = a.send_l4(addr(2), control, invite.encode(), 1, 1).unwrap();
     let delivered = a_to_b(&mut a, &mut b, frame);
     let invite = CallSignal::decode(&delivered[0]).unwrap();
     assert!(matches!(invite, CallSignal::Invite { .. }));
@@ -135,9 +150,7 @@ fn two_peers_run_a_live_media_call_over_native_l4() {
     let accept = CallSignal::Accept {
         call_id: aether_core::transport::media::call_id_hex(&call_id),
     };
-    let frame = b
-        .send_l4(addr(1), control, accept.encode(), 1, 1)
-        .unwrap();
+    let frame = b.send_l4(addr(1), control, accept.encode(), 1, 1).unwrap();
     match a.ingest_frame(node(2), &frame, 1, 1).unwrap() {
         NativeIngress::Local { delivered, .. } => {
             assert!(matches!(
@@ -166,7 +179,10 @@ fn two_peers_run_a_live_media_call_over_native_l4() {
         }
         let frame = a.send_l4(addr(2), media, datagram, 1, 1).unwrap();
         let arrival_ms = 1000 + sequence as u64 * 20;
-        let datagrams = match b.ingest_frame(node(1), &frame, 1, arrival_ms / 1000).unwrap() {
+        let datagrams = match b
+            .ingest_frame(node(1), &frame, 1, arrival_ms / 1000)
+            .unwrap()
+        {
             NativeIngress::Local { delivered, .. } => delivered,
             _ => panic!("media must deliver locally"),
         };
